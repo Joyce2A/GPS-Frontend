@@ -1,264 +1,775 @@
-import { useEffect, useState } from 'react';
-import { Plus, Package, Truck, Building, Container, Link as LinkIcon, Unlink } from 'lucide-react';
-import { supabase } from '../lib/supabase';
-import { useAuth } from '../contexts/AuthContext';
-import { AddAssetModal } from './AddAssetModal';
-import { LinkDeviceModal } from './LinkDeviceModal';
+import { useState, useEffect } from "react";
+import { Plus, Package, MapPin, Edit, Trash2, RefreshCw, Eye } from "lucide-react";
+import { AddAssetModal } from "../components/AddAssetModal";
+import axios from "axios";
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
 
 interface Asset {
-  id: string;
   asset_id: string;
-  name: string;
-  type: string;
-  description: string | null;
-  status: string;
-}
-
-interface Device {
-  id: string;
-  device_id: string;
-  name: string;
-  status: string;
-}
-
-interface AssetWithDevice extends Asset {
-  linkedDevice?: Device;
+  asset_name: string;
+  asset_type: string;
+  description?: string;
+  registered_location: {
+    latitude: number;
+    longitude: number;
+    radius: number;
+  };
+  created_at?: string;
 }
 
 export function AssetsPage() {
-  const { user } = useAuth();
-  const [assets, setAssets] = useState<AssetWithDevice[]>([]);
+  const [assets, setAssets] = useState<Asset[]>([]);
+  const [filteredAssets, setFilteredAssets] = useState<Asset[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [showLinkModal, setShowLinkModal] = useState(false);
-  const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
+  const [error, setError] = useState("");
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingAsset, setEditingAsset] = useState<Asset | null>(null);
+  const [viewAsset, setViewAsset] = useState<Asset | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
 
-  useEffect(() => {
-    loadAssets();
-  }, [user]);
-
-  const loadAssets = async () => {
-    if (!user) return;
-
+  const fetchAssets = async () => {
     try {
-      const { data: assetsData, error: assetsError } = await supabase
-        .from('assets')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
+      setLoading(true);
+      setError("");
+      const token = localStorage.getItem("auth_token");
+      if (!token) throw new Error("Not authenticated");
 
-      if (assetsError) throw assetsError;
-
-      const { data: linksData, error: linksError } = await supabase
-        .from('device_asset_links')
-        .select(`
-          asset_id,
-          devices:device_id (
-            id,
-            device_id,
-            name,
-            status
-          )
-        `)
-        .eq('user_id', user.id)
-        .is('unlinked_at', null);
-
-      if (linksError) throw linksError;
-
-      const assetsWithDevices = (assetsData || []).map(asset => {
-        const link = linksData?.find((l: any) => l.asset_id === asset.id);
-        return {
-          ...asset,
-          linkedDevice: link?.devices as Device | undefined,
-        };
+      const response = await axios.get(`${API_BASE_URL}/assets`, {
+        headers: { Authorization: `Bearer ${token}` },
       });
 
-      setAssets(assetsWithDevices);
-    } catch (error) {
-      console.error('Error loading assets:', error);
+      setAssets(response.data);
+      setFilteredAssets(response.data);
+    } catch (err: any) {
+      console.error("Fetch error:", err);
+      setError(err.response?.data?.detail || err.message || "Failed to fetch assets");
     } finally {
       setLoading(false);
     }
   };
 
-  const unlinkDevice = async (assetId: string) => {
-    if (!confirm('Are you sure you want to unlink this device?')) return;
+  useEffect(() => {
+    fetchAssets();
+  }, []);
+
+  const handleDelete = async (assetId: string) => {
+    if (!confirm("Are you sure you want to delete this asset?")) return;
 
     try {
-      const { error } = await supabase
-        .from('device_asset_links')
-        .update({ unlinked_at: new Date().toISOString() })
-        .eq('asset_id', assetId)
-        .is('unlinked_at', null);
+      const token = localStorage.getItem("auth_token");
+      if (!token) throw new Error("Not authenticated");
 
-      if (error) throw error;
-      loadAssets();
-    } catch (error) {
-      console.error('Error unlinking device:', error);
+      await axios.delete(`${API_BASE_URL}/assets/by-asset/${assetId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      fetchAssets();
+    } catch (err: any) {
+      alert(err.response?.data?.detail || "Failed to delete asset");
     }
   };
 
-  const getAssetIcon = (type: string) => {
-    switch (type) {
-      case 'vehicle': return Truck;
-      case 'equipment': return Package;
-      case 'container': return Container;
-      case 'building': return Building;
-      default: return Package;
+  const handleSearch = (term: string) => {
+    const trimmed = term.trim();
+    setSearchTerm(trimmed);
+
+    if (!trimmed) {
+      setFilteredAssets(assets);
+    } else {
+      const filtered = assets.filter((a) =>
+        a.asset_id.toLowerCase().includes(trimmed.toLowerCase())
+      );
+      setFilteredAssets(filtered);
     }
   };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'active': return 'bg-teal-500';
-      case 'inactive': return 'bg-gray-500';
-      case 'maintenance': return 'bg-amber-500';
-      default: return 'bg-gray-500';
-    }
-  };
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-      </div>
-    );
-  }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-semibold text-gray-900">Assets</h2>
-          <p className="text-gray-600 mt-1">Manage your trackable assets and device assignments</p>
-        </div>
-        <button
-          onClick={() => setShowAddModal(true)}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex items-center space-x-2"
-        >
-          <Plus className="w-5 h-5" />
-          <span>Add Asset</span>
-        </button>
-      </div>
-
-      {assets.length === 0 ? (
-        <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
-          <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Package className="w-8 h-8 text-gray-400" />
+    <div className="min-h-screen bg-gradient-to-br from-green-50 to-gray-100">
+      <div className="max-w-7xl mx-auto px-4 py-8">
+        {/* Header */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+          <div>
+            <h1 className="text-4xl font-bold text-gray-800 flex items-center gap-3">
+              <Package className="w-10 h-10 text-green-600" />
+              Assets
+            </h1>
+            <p className="text-gray-600 mt-2">Manage your tracked assets</p>
           </div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">No assets yet</h3>
-          <p className="text-gray-600 mb-6">Create your first asset to start tracking</p>
-          <button
-            onClick={() => setShowAddModal(true)}
-            className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
-          >
-            Add Asset
-          </button>
+
+          {/* Actions */}
+          <div className="flex gap-3 flex-wrap">
+            <input
+              type="text"
+              placeholder="Search by Asset ID..."
+              value={searchTerm}
+              onChange={(e) => handleSearch(e.target.value)}
+              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+            <button
+              onClick={fetchAssets}
+              className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition flex items-center gap-2"
+            >
+              <RefreshCw className="w-4 h-4" />
+              Refresh
+            </button>
+            <button
+              onClick={() => {
+                setEditingAsset(null);
+                setViewAsset(null);
+                setIsModalOpen(true);
+              }}
+              className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition flex items-center gap-2 shadow-lg"
+            >
+              <Plus className="w-5 h-5" />
+              Add Asset
+            </button>
+          </div>
         </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {assets.map((asset) => {
-            const Icon = getAssetIcon(asset.type);
-            return (
-              <div key={asset.id} className="bg-white rounded-lg border border-gray-200 p-6">
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                      <Icon className="w-6 h-6 text-blue-600" />
+
+        {/* Error */}
+        {error && (
+          <div className="mb-6 p-4 bg-red-100 border border-red-300 text-red-700 rounded-lg">
+            {error}
+          </div>
+        )}
+
+        {/* Loading */}
+        {loading ? (
+          <div className="flex items-center justify-center h-64">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600"></div>
+          </div>
+        ) : filteredAssets.length === 0 ? (
+          <div className="bg-white rounded-xl shadow-lg p-12 text-center">
+            <Package className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+            <h3 className="text-xl font-semibold text-gray-600 mb-2">No assets found</h3>
+            <p className="text-gray-500 mb-6">
+              {searchTerm ? "No results for this Asset ID" : "Get started by adding your first asset"}
+            </p>
+            <button
+              onClick={() => {
+                setEditingAsset(null);
+                setViewAsset(null);
+                setIsModalOpen(true);
+              }}
+              className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
+            >
+              Add Asset
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredAssets.map((asset) => (
+              <div
+                key={asset.asset_id}
+                className="bg-white rounded-xl shadow-lg hover:shadow-xl transition p-6"
+              >
+                {/* Asset Info */}
+                <div className="flex justify-between items-start mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-3 bg-green-100 rounded-lg">
+                      <Package className="w-6 h-6 text-green-600" />
                     </div>
                     <div>
-                      <h3 className="font-semibold text-gray-900">{asset.name}</h3>
+                      <h3 className="font-semibold text-gray-800">{asset.asset_name}</h3>
                       <p className="text-sm text-gray-500">{asset.asset_id}</p>
                     </div>
                   </div>
-                  <div className={`w-3 h-3 rounded-full ${getStatusColor(asset.status)}`}></div>
                 </div>
 
                 <div className="space-y-2 mb-4">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-600">Type</span>
-                    <span className="font-medium text-gray-900 capitalize">{asset.type}</span>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">Type:</span>
+                    <span className="font-medium text-gray-800">{asset.asset_type}</span>
                   </div>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-600">Status</span>
-                    <span className="font-medium text-gray-900 capitalize">{asset.status}</span>
-                  </div>
+
                   {asset.description && (
-                    <p className="text-sm text-gray-600 pt-2 border-t border-gray-100">
-                      {asset.description}
-                    </p>
+                    <div className="text-sm">
+                      <span className="text-gray-600">Description:</span>
+                      <p className="text-gray-800 mt-1">{asset.description}</p>
+                    </div>
+                  )}
+
+                  <div className="flex items-start gap-2 text-sm pt-2">
+                    <MapPin className="w-4 h-4 text-green-600 mt-0.5" />
+                    <div className="flex-1">
+                      <span className="text-gray-600">Location:</span>
+                      <p className="text-gray-800 font-mono text-xs mt-1">
+                        {asset.registered_location.latitude.toFixed(6)},{" "}
+                        {asset.registered_location.longitude.toFixed(6)}{" "}
+                        <span className="text-gray-500">
+                          (Radius: {asset.registered_location.radius} m)
+                        </span>
+                      </p>
+                    </div>
+                  </div>
+
+                  {asset.created_at && (
+                    <div className="flex justify-between text-sm pt-2 border-t">
+                      <span className="text-gray-600">Created:</span>
+                      <span className="font-medium text-gray-800">
+                        {new Date(asset.created_at).toLocaleDateString()}
+                      </span>
+                    </div>
                   )}
                 </div>
 
-                {asset.linkedDevice ? (
-                  <div className="bg-teal-50 border border-teal-200 rounded-lg p-3 mb-3">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs font-medium text-teal-900">Linked Device</span>
-                      <div className={`w-2 h-2 rounded-full ${
-                        asset.linkedDevice.status === 'online' ? 'bg-teal-500' : 'bg-gray-500'
-                      }`}></div>
-                    </div>
-                    <p className="text-sm font-medium text-teal-900">{asset.linkedDevice.name}</p>
-                    <p className="text-xs text-teal-700">{asset.linkedDevice.device_id}</p>
-                  </div>
-                ) : (
-                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mb-3 text-center">
-                    <p className="text-xs text-gray-600">No device linked</p>
-                  </div>
-                )}
-
-                <div className="flex space-x-2">
-                  {asset.linkedDevice ? (
-                    <button
-                      onClick={() => unlinkDevice(asset.id)}
-                      className="flex-1 px-3 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition text-sm font-medium flex items-center justify-center"
-                    >
-                      <Unlink className="w-4 h-4 mr-1" />
-                      Unlink
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => {
-                        setSelectedAsset(asset);
-                        setShowLinkModal(true);
-                      }}
-                      className="flex-1 px-3 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition text-sm font-medium flex items-center justify-center"
-                    >
-                      <LinkIcon className="w-4 h-4 mr-1" />
-                      Link Device
-                    </button>
-                  )}
+                {/* Actions */}
+                <div className="flex gap-2 pt-4 border-t">
+                  <button
+                    onClick={() => {
+                      setEditingAsset(asset);
+                      setViewAsset(null);
+                      setIsModalOpen(true);
+                    }}
+                    className="flex-1 px-3 py-2 bg-green-50 text-green-600 rounded-lg hover:bg-green-100 transition flex items-center justify-center gap-2 text-sm"
+                  >
+                    <Edit className="w-4 h-4" />
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => handleDelete(asset.asset_id)}
+                    className="flex-1 px-3 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition flex items-center justify-center gap-2 text-sm"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    Delete
+                  </button>
+                  <button
+                    onClick={() => {
+                      setEditingAsset(null);
+                      setViewAsset(asset);
+                      setIsModalOpen(true);
+                    }}
+                    className="flex-1 px-3 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition flex items-center justify-center gap-2 text-sm"
+                  >
+                    <Eye className="w-4 h-4" />
+                    View
+                  </button>
                 </div>
               </div>
-            );
-          })}
-        </div>
-      )}
+            ))}
+          </div>
+        )}
+      </div>
 
-      {showAddModal && (
-        <AddAssetModal
-          onClose={() => setShowAddModal(false)}
-          onSuccess={() => {
-            setShowAddModal(false);
-            loadAssets();
-          }}
-        />
-      )}
-
-      {showLinkModal && selectedAsset && (
-        <LinkDeviceModal
-          asset={selectedAsset}
-          onClose={() => {
-            setShowLinkModal(false);
-            setSelectedAsset(null);
-          }}
-          onSuccess={() => {
-            setShowLinkModal(false);
-            setSelectedAsset(null);
-            loadAssets();
-          }}
-        />
-      )}
+      {/* Modal */}
+      <AddAssetModal
+        isOpen={isModalOpen}
+        onClose={() => {
+          setIsModalOpen(false);
+          setEditingAsset(null);
+          setViewAsset(null);
+        }}
+        onSuccess={fetchAssets}
+        editingAsset={editingAsset}
+        viewAsset={viewAsset}
+      />
     </div>
   );
 }
+
+// import { useState, useEffect } from "react";
+// import { Plus, Package, MapPin, Edit, Trash2, RefreshCw } from "lucide-react";
+// import { AddAssetModal } from "../components/AddAssetModal";
+// import axios from "axios";
+
+// const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
+
+// interface Asset {
+//   asset_id: string;
+//   asset_name: string;
+//   asset_type: string;
+//   description?: string;
+//   registered_location: {
+//     latitude: number;
+//     longitude: number;
+//   };
+//   created_at?: string;
+// }
+
+// export function AssetsPage() {
+//   const [assets, setAssets] = useState<Asset[]>([]);
+//   const [filteredAssets, setFilteredAssets] = useState<Asset[]>([]);
+//   const [loading, setLoading] = useState(true);
+//   const [error, setError] = useState("");
+//   const [isModalOpen, setIsModalOpen] = useState(false);
+//   const [editingAsset, setEditingAsset] = useState<Asset | null>(null);
+//   const [searchTerm, setSearchTerm] = useState("");
+
+//   // Fetch assets from backend
+//   const fetchAssets = async () => {
+//     try {
+//       setLoading(true);
+//       setError("");
+//       const token = localStorage.getItem("auth_token");
+//       if (!token) throw new Error("Not authenticated");
+
+//       const response = await axios.get(`${API_BASE_URL}/assets`, {
+//         headers: { Authorization: `Bearer ${token}` },
+//       });
+
+//       setAssets(response.data);
+//       setFilteredAssets(response.data);
+//     } catch (err: any) {
+//       console.error("Fetch error:", err);
+//       setError(err.response?.data?.detail || err.message || "Failed to fetch assets");
+//     } finally {
+//       setLoading(false);
+//     }
+//   };
+
+//   useEffect(() => {
+//     fetchAssets();
+//   }, []);
+
+//   // Delete asset
+//   const handleDelete = async (assetId: string) => {
+//     if (!confirm("Are you sure you want to delete this asset?")) return;
+
+//     try {
+//       const token = localStorage.getItem("auth_token");
+//       if (!token) throw new Error("Not authenticated");
+
+//       await axios.delete(`${API_BASE_URL}/assets/by-asset/${assetId}`, {
+//         headers: { Authorization: `Bearer ${token}` },
+//       });
+
+//       fetchAssets();
+//     } catch (err: any) {
+//       alert(err.response?.data?.detail || "Failed to delete asset");
+//     }
+//   };
+
+//   // Search assets by ID
+//   const handleSearch = (term: string) => {
+//     const trimmed = term.trim();
+//     setSearchTerm(trimmed);
+
+//     if (!trimmed) {
+//       setFilteredAssets(assets);
+//     } else {
+//       const filtered = assets.filter((a) =>
+//         a.asset_id.toLowerCase().includes(trimmed.toLowerCase())
+//       );
+//       setFilteredAssets(filtered);
+//     }
+//   };
+
+//   return (
+//     <div className="min-h-screen bg-gradient-to-br from-green-50 to-gray-100">
+//       <div className="max-w-7xl mx-auto px-4 py-8">
+//         {/* Header */}
+//         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+//           <div>
+//             <h1 className="text-4xl font-bold text-gray-800 flex items-center gap-3">
+//               <Package className="w-10 h-10 text-green-600" />
+//               Assets
+//             </h1>
+//             <p className="text-gray-600 mt-2">Manage your tracked assets</p>
+//           </div>
+
+//           {/* Actions */}
+//           <div className="flex gap-3 flex-wrap">
+//             <input
+//               type="text"
+//               placeholder="Search by Asset ID..."
+//               value={searchTerm}
+//               onChange={(e) => handleSearch(e.target.value)}
+//               className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+//             />
+//             <button
+//               onClick={fetchAssets}
+//               className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition flex items-center gap-2"
+//             >
+//               <RefreshCw className="w-4 h-4" />
+//               Refresh
+//             </button>
+//             <button
+//               onClick={() => {
+//                 setEditingAsset(null);
+//                 setIsModalOpen(true);
+//               }}
+//               className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition flex items-center gap-2 shadow-lg"
+//             >
+//               <Plus className="w-5 h-5" />
+//               Add Asset
+//             </button>
+//           </div>
+//         </div>
+
+//         {/* Error */}
+//         {error && (
+//           <div className="mb-6 p-4 bg-red-100 border border-red-300 text-red-700 rounded-lg">
+//             {error}
+//           </div>
+//         )}
+
+//         {/* Loading */}
+//         {loading ? (
+//           <div className="flex items-center justify-center h-64">
+//             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600"></div>
+//           </div>
+//         ) : filteredAssets.length === 0 ? (
+//           <div className="bg-white rounded-xl shadow-lg p-12 text-center">
+//             <Package className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+//             <h3 className="text-xl font-semibold text-gray-600 mb-2">No assets found</h3>
+//             <p className="text-gray-500 mb-6">
+//               {searchTerm ? "No results for this Asset ID" : "Get started by adding your first asset"}
+//             </p>
+//             <button
+//               onClick={() => {
+//                 setEditingAsset(null);
+//                 setIsModalOpen(true);
+//               }}
+//               className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
+//             >
+//               Add Asset
+//             </button>
+//           </div>
+//         ) : (
+//           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+//             {filteredAssets.map((asset) => (
+//               <div
+//                 key={asset.asset_id}
+//                 className="bg-white rounded-xl shadow-lg hover:shadow-xl transition p-6"
+//               >
+//                 {/* Asset Info */}
+//                 <div className="flex justify-between items-start mb-4">
+//                   <div className="flex items-center gap-3">
+//                     <div className="p-3 bg-green-100 rounded-lg">
+//                       <Package className="w-6 h-6 text-green-600" />
+//                     </div>
+//                     <div>
+//                       <h3 className="font-semibold text-gray-800">{asset.asset_name}</h3>
+//                       <p className="text-sm text-gray-500">{asset.asset_id}</p>
+//                     </div>
+//                   </div>
+//                 </div>
+
+//                 <div className="space-y-2 mb-4">
+//                   <div className="flex justify-between text-sm">
+//                     <span className="text-gray-600">Type:</span>
+//                     <span className="font-medium text-gray-800">{asset.asset_type}</span>
+//                   </div>
+
+//                   {asset.description && (
+//                     <div className="text-sm">
+//                       <span className="text-gray-600">Description:</span>
+//                       <p className="text-gray-800 mt-1">{asset.description}</p>
+//                     </div>
+//                   )}
+
+//                   <div className="flex items-start gap-2 text-sm pt-2">
+//                     <MapPin className="w-4 h-4 text-green-600 mt-0.5" />
+//                     <div className="flex-1">
+//                       <span className="text-gray-600">Location:</span>
+//                       <p className="text-gray-800 font-mono text-xs mt-1">
+//                         {asset.registered_location.latitude.toFixed(6)},{" "}
+//                         {asset.registered_location.longitude.toFixed(6)}
+//                       </p>
+//                     </div>
+//                   </div>
+
+//                   {asset.created_at && (
+//                     <div className="flex justify-between text-sm pt-2 border-t">
+//                       <span className="text-gray-600">Created:</span>
+//                       <span className="font-medium text-gray-800">
+//                         {new Date(asset.created_at).toLocaleDateString()}
+//                       </span>
+//                     </div>
+//                   )}
+//                 </div>
+
+//                 {/* Actions */}
+//                 <div className="flex gap-2 pt-4 border-t">
+//                   <button
+//                     onClick={() => {
+//                       setEditingAsset(asset);
+//                       setIsModalOpen(true);
+//                     }}
+//                     className="flex-1 px-3 py-2 bg-green-50 text-green-600 rounded-lg hover:bg-green-100 transition flex items-center justify-center gap-2 text-sm"
+//                   >
+//                     <Edit className="w-4 h-4" />
+//                     Edit
+//                   </button>
+//                   <button
+//                     onClick={() => handleDelete(asset.asset_id)}
+//                     className="flex-1 px-3 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition flex items-center justify-center gap-2 text-sm"
+//                   >
+//                     <Trash2 className="w-4 h-4" />
+//                     Delete
+//                   </button>
+//                 </div>
+//               </div>
+//             ))}
+//           </div>
+//         )}
+//       </div>
+
+//       {/* Modal */}
+//       <AddAssetModal
+//         isOpen={isModalOpen}
+//         onClose={() => {
+//           setIsModalOpen(false);
+//           setEditingAsset(null);
+//         }}
+//         onSuccess={fetchAssets}
+//         editingAsset={editingAsset}
+//       />
+//     </div>
+//   );
+// }
+// import { useState, useEffect } from "react";
+// import { Plus, Package, MapPin, Edit, Trash2, RefreshCw, Search } from "lucide-react";
+// import { AddAssetModal } from "../components/AddAssetModal";
+// import axios from "axios";
+
+// const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
+
+// interface Asset {
+//   asset_id: string;
+//   asset_name: string;
+//   asset_type: string;
+//   description?: string;
+//   registered_location: {
+//     latitude: number;
+//     longitude: number;
+//   };
+//   created_at?: string;
+//   id?: string;
+// }
+
+// export function AssetsPage() {
+//   const [assets, setAssets] = useState<Asset[]>([]);
+//   const [filteredAssets, setFilteredAssets] = useState<Asset[]>([]);
+//   const [loading, setLoading] = useState(true);
+//   const [error, setError] = useState("");
+//   const [isModalOpen, setIsModalOpen] = useState(false);
+//   const [editingAsset, setEditingAsset] = useState<Asset | null>(null);
+//   const [searchTerm, setSearchTerm] = useState("");
+
+//   // Fetch assets from backend
+//   const fetchAssets = async () => {
+//     try {
+//       setLoading(true);
+//       setError("");
+//       const token = localStorage.getItem("auth_token");
+//       if (!token) throw new Error("Not authenticated");
+
+//       const response = await axios.get(`${API_BASE_URL}/assets`, {
+//         headers: { Authorization: `Bearer ${token}` },
+//       });
+
+//       setAssets(response.data);
+//       setFilteredAssets(response.data);
+//     } catch (err: any) {
+//       console.error("Fetch error:", err);
+//       setError(err.response?.data?.detail || err.message || "Failed to fetch assets");
+//     } finally {
+//       setLoading(false);
+//     }
+//   };
+
+//   useEffect(() => {
+//     fetchAssets();
+//   }, []);
+
+//   // Delete asset
+//   const handleDelete = async (assetId: string) => {
+//     if (!confirm("Are you sure you want to delete this asset?")) return;
+
+//     try {
+//       const token = localStorage.getItem("auth_token");
+//       if (!token) throw new Error("Not authenticated");
+
+//       await axios.delete(`${API_BASE_URL}/assets/by_asset/${assetId}`, {
+//         headers: { Authorization: `Bearer ${token}` },
+//       });
+
+//       fetchAssets();
+//     } catch (err: any) {
+//       alert(err.response?.data?.detail || "Failed to delete asset");
+//     }
+//   };
+
+//   // Search assets by ID
+//   const handleSearch = (term: string) => {
+//     setSearchTerm(term);
+//     if (!term) {
+//       setFilteredAssets(assets);
+//     } else {
+//       const filtered = assets.filter((a) =>
+//         a.asset_id.toLowerCase().includes(term.toLowerCase())
+//       );
+//       setFilteredAssets(filtered);
+//     }
+//   };
+
+//   return (
+//     <div className="min-h-screen bg-gradient-to-br from-green-50 to-gray-100">
+//       <div className="max-w-7xl mx-auto px-4 py-8">
+//         {/* Header */}
+//         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+//           <div>
+//             <h1 className="text-4xl font-bold text-gray-800 flex items-center gap-3">
+//               <Package className="w-10 h-10 text-green-600" />
+//               Assets
+//             </h1>
+//             <p className="text-gray-600 mt-2">Manage your tracked assets</p>
+//           </div>
+
+//           {/* Actions */}
+//           <div className="flex gap-3 flex-wrap">
+//             <input
+//               type="text"
+//               placeholder="Search by Asset ID..."
+//               value={searchTerm}
+//               onChange={(e) => handleSearch(e.target.value)}
+//               className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+//             />
+//             <button
+//               onClick={fetchAssets}
+//               className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition flex items-center gap-2"
+//             >
+//               <RefreshCw className="w-4 h-4" />
+//               Refresh
+//             </button>
+//             <button
+//               onClick={() => {
+//                 setEditingAsset(null); // clear editing
+//                 setIsModalOpen(true);
+//               }}
+//               className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition flex items-center gap-2 shadow-lg"
+//             >
+//               <Plus className="w-5 h-5" />
+//               Add Asset
+//             </button>
+//           </div>
+//         </div>
+
+//         {/* Error */}
+//         {error && (
+//           <div className="mb-6 p-4 bg-red-100 border border-red-300 text-red-700 rounded-lg">
+//             {error}
+//           </div>
+//         )}
+
+//         {/* Loading */}
+//         {loading ? (
+//           <div className="flex items-center justify-center h-64">
+//             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600"></div>
+//           </div>
+//         ) : filteredAssets.length === 0 ? (
+//           <div className="bg-white rounded-xl shadow-lg p-12 text-center">
+//             <Package className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+//             <h3 className="text-xl font-semibold text-gray-600 mb-2">No assets found</h3>
+//             <p className="text-gray-500 mb-6">
+//               {searchTerm ? "No results for this Asset ID" : "Get started by adding your first asset"}
+//             </p>
+//             <button
+//               onClick={() => {
+//                 setEditingAsset(null);
+//                 setIsModalOpen(true);
+//               }}
+//               className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
+//             >
+//               Add Asset
+//             </button>
+//           </div>
+//         ) : (
+//           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+//             {filteredAssets.map((asset) => (
+//               <div
+//                 key={asset.id}
+//                 className="bg-white rounded-xl shadow-lg hover:shadow-xl transition p-6"
+//               >
+//                 {/* Asset Info */}
+//                 <div className="flex justify-between items-start mb-4">
+//                   <div className="flex items-center gap-3">
+//                     <div className="p-3 bg-green-100 rounded-lg">
+//                       <Package className="w-6 h-6 text-green-600" />
+//                     </div>
+//                     <div>
+//                       <h3 className="font-semibold text-gray-800">{asset.asset_name}</h3>
+//                       <p className="text-sm text-gray-500">{asset.asset_id}</p>
+//                     </div>
+//                   </div>
+//                 </div>
+
+//                 <div className="space-y-2 mb-4">
+//                   <div className="flex justify-between text-sm">
+//                     <span className="text-gray-600">Type:</span>
+//                     <span className="font-medium text-gray-800">{asset.asset_type}</span>
+//                   </div>
+
+//                   {asset.description && (
+//                     <div className="text-sm">
+//                       <span className="text-gray-600">Description:</span>
+//                       <p className="text-gray-800 mt-1">{asset.description}</p>
+//                     </div>
+//                   )}
+
+//                   <div className="flex items-start gap-2 text-sm pt-2">
+//                     <MapPin className="w-4 h-4 text-green-600 mt-0.5" />
+//                     <div className="flex-1">
+//                       <span className="text-gray-600">Location:</span>
+//                       <p className="text-gray-800 font-mono text-xs mt-1">
+//                         {asset.registered_location.latitude.toFixed(6)},{" "}
+//                         {asset.registered_location.longitude.toFixed(6)}
+//                       </p>
+//                     </div>
+//                   </div>
+
+//                   {asset.created_at && (
+//                     <div className="flex justify-between text-sm pt-2 border-t">
+//                       <span className="text-gray-600">Created:</span>
+//                       <span className="font-medium text-gray-800">
+//                         {new Date(asset.created_at).toLocaleDateString()}
+//                       </span>
+//                     </div>
+//                   )}
+//                 </div>
+
+//                 {/* Actions */}
+//                 <div className="flex gap-2 pt-4 border-t">
+//                   <button
+//                     onClick={() => {
+//                       setEditingAsset(asset);
+//                       setIsModalOpen(true);
+//                     }}
+//                     className="flex-1 px-3 py-2 bg-green-50 text-green-600 rounded-lg hover:bg-green-100 transition flex items-center justify-center gap-2 text-sm"
+//                   >
+//                     <Edit className="w-4 h-4" />
+//                     Edit
+//                   </button>
+//                   <button
+//                     onClick={() => handleDelete(asset.asset_id)}
+//                     className="flex-1 px-3 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition flex items-center justify-center gap-2 text-sm"
+//                   >
+//                     <Trash2 className="w-4 h-4" />
+//                     Delete
+//                   </button>
+//                 </div>
+//               </div>
+//             ))}
+//           </div>
+//         )}
+//       </div>
+
+//       {/* Modal */}
+//       <AddAssetModal
+//         isOpen={isModalOpen}
+//         onClose={() => {
+//           setIsModalOpen(false);
+//           setEditingAsset(null);
+//         }}
+//         onSuccess={fetchAssets}
+//         editingAsset={editingAsset}
+//       />
+//     </div>
+//   );
+// }
+
+
+
+
