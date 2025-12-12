@@ -1,4 +1,6 @@
-import { useState, useEffect } from "react";
+// src/components/AddDeviceModal.tsx
+
+import { useEffect, useState } from "react";
 import axios from "axios";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
@@ -10,6 +12,7 @@ interface Device {
   device_model?: string;
   battery_level?: number;
   device_status?: string;
+  time_stamp?: string;
 }
 
 interface AddDeviceModalProps {
@@ -17,9 +20,10 @@ interface AddDeviceModalProps {
   onClose: () => void;
   onSuccess: () => void;
   editingDevice: Device | null;
+  viewDevice?: Device | null;
 }
 
-export function AddDeviceModal({ isOpen, onClose, onSuccess, editingDevice }: AddDeviceModalProps) {
+export function AddDeviceModal({ isOpen, onClose, onSuccess, editingDevice, viewDevice }: AddDeviceModalProps) {
   const [deviceId, setDeviceId] = useState("");
   const [deviceName, setDeviceName] = useState("");
   const [deviceModel, setDeviceModel] = useState("");
@@ -29,6 +33,7 @@ export function AddDeviceModal({ isOpen, onClose, onSuccess, editingDevice }: Ad
 
   const token = localStorage.getItem("auth_token");
 
+  // When editingDevice changes, populate; when viewDevice provided, keep fields in sync for display but read-only
   useEffect(() => {
     if (editingDevice) {
       setDeviceId(editingDevice.device_id);
@@ -36,10 +41,16 @@ export function AddDeviceModal({ isOpen, onClose, onSuccess, editingDevice }: Ad
       setDeviceModel(editingDevice.device_model || "");
       setBatteryLevel(editingDevice.battery_level ?? "");
       setDeviceStatus(editingDevice.device_status || "offline");
+    } else if (viewDevice) {
+      setDeviceId(viewDevice.device_id);
+      setDeviceName(viewDevice.device_name || "");
+      setDeviceModel(viewDevice.device_model || "");
+      setBatteryLevel(viewDevice.battery_level ?? "");
+      setDeviceStatus(viewDevice.device_status || "offline");
     } else {
       resetForm();
     }
-  }, [editingDevice]);
+  }, [editingDevice, viewDevice]);
 
   const resetForm = () => {
     setDeviceId("");
@@ -61,6 +72,11 @@ export function AddDeviceModal({ isOpen, onClose, onSuccess, editingDevice }: Ad
 
     if (!token) {
       setError("Not authenticated");
+      return;
+    }
+
+    if (!deviceId) {
+      setError("Device ID is required");
       return;
     }
 
@@ -94,6 +110,31 @@ export function AddDeviceModal({ isOpen, onClose, onSuccess, editingDevice }: Ad
 
   if (!isOpen) return null;
 
+  // VIEW MODE: read-only details
+  if (viewDevice && !editingDevice) {
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-start pt-10">
+        <div className="bg-white p-6 rounded-lg w-96 shadow-lg space-y-4">
+          <h2 className="text-xl font-bold">Device Details</h2>
+
+          <p><b>Device ID:</b> {viewDevice.device_id}</p>
+          <p><b>Name:</b> {viewDevice.device_name || "-"}</p>
+          <p><b>Model:</b> {viewDevice.device_model || "-"}</p>
+          <p><b>Status:</b> {viewDevice.device_status || "-"}</p>
+          <p><b>Battery:</b> {viewDevice.battery_level != null ? `${viewDevice.battery_level}%` : "-"}</p>
+          <p><b>Last updated:</b> {viewDevice.time_stamp || "-"}</p>
+
+          <div className="flex justify-end">
+            <button onClick={onClose} className="px-4 py-2 border rounded">
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ADD / EDIT MODE
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-start pt-10">
       <div className="bg-white p-6 rounded-lg w-96 shadow-lg space-y-4">
@@ -173,6 +214,181 @@ export function AddDeviceModal({ isOpen, onClose, onSuccess, editingDevice }: Ad
     </div>
   );
 }
+// import { useState, useEffect } from "react";
+// import axios from "axios";
+
+// const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
+
+// interface Device {
+//   id: string;
+//   device_id: string;
+//   device_name?: string;
+//   device_model?: string;
+//   battery_level?: number;
+//   device_status?: string;
+// }
+
+// interface AddDeviceModalProps {
+//   isOpen: boolean;
+//   onClose: () => void;
+//   onSuccess: () => void;
+//   editingDevice: Device | null;
+// }
+
+// export function AddDeviceModal({ isOpen, onClose, onSuccess, editingDevice }: AddDeviceModalProps) {
+//   const [deviceId, setDeviceId] = useState("");
+//   const [deviceName, setDeviceName] = useState("");
+//   const [deviceModel, setDeviceModel] = useState("");
+//   const [batteryLevel, setBatteryLevel] = useState<number | "">("");
+//   const [deviceStatus, setDeviceStatus] = useState("offline");
+//   const [error, setError] = useState("");
+
+//   const token = localStorage.getItem("auth_token");
+
+//   useEffect(() => {
+//     if (editingDevice) {
+//       setDeviceId(editingDevice.device_id);
+//       setDeviceName(editingDevice.device_name || "");
+//       setDeviceModel(editingDevice.device_model || "");
+//       setBatteryLevel(editingDevice.battery_level ?? "");
+//       setDeviceStatus(editingDevice.device_status || "offline");
+//     } else {
+//       resetForm();
+//     }
+//   }, [editingDevice]);
+
+//   const resetForm = () => {
+//     setDeviceId("");
+//     setDeviceName("");
+//     setDeviceModel("");
+//     setBatteryLevel("");
+//     setDeviceStatus("offline");
+//     setError("");
+//   };
+
+//   const closeModal = () => {
+//     resetForm();
+//     onClose();
+//   };
+
+//   const handleSubmit = async (e: React.FormEvent) => {
+//     e.preventDefault();
+//     setError("");
+
+//     if (!token) {
+//       setError("Not authenticated");
+//       return;
+//     }
+
+//     try {
+//       const payload = {
+//         device_id: deviceId,
+//         device_name: deviceName,
+//         device_model: deviceModel,
+//         battery_level: batteryLevel === "" ? null : Number(batteryLevel),
+//         device_status: deviceStatus,
+//       };
+
+//       if (editingDevice) {
+//         // UPDATE
+//         await axios.put(`${API_BASE_URL}/devices/by-device/${editingDevice.device_id}`, payload, {
+//           headers: { Authorization: `Bearer ${token}` },
+//         });
+//       } else {
+//         // CREATE
+//         await axios.post(`${API_BASE_URL}/devices`, payload, {
+//           headers: { Authorization: `Bearer ${token}` },
+//         });
+//       }
+
+//       onSuccess();
+//       closeModal();
+//     } catch (err: any) {
+//       setError(err.response?.data?.detail || "Failed to save device");
+//     }
+//   };
+
+//   if (!isOpen) return null;
+
+//   return (
+//     <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-start pt-10">
+//       <div className="bg-white p-6 rounded-lg w-96 shadow-lg space-y-4">
+//         <h2 className="text-xl font-bold">
+//           {editingDevice ? "Edit Device" : "Add Device"}
+//         </h2>
+
+//         {error && <p className="text-red-500">{error}</p>}
+
+//         <form onSubmit={handleSubmit} className="space-y-3">
+//           <input
+//             type="text"
+//             placeholder="Device ID"
+//             required
+//             value={deviceId}
+//             onChange={(e) => setDeviceId(e.target.value)}
+//             disabled={!!editingDevice}
+//             className="border p-2 rounded w-full"
+//           />
+
+//           <input
+//             type="text"
+//             placeholder="Device Name"
+//             value={deviceName}
+//             onChange={(e) => setDeviceName(e.target.value)}
+//             className="border p-2 rounded w-full"
+//           />
+
+//           <input
+//             type="text"
+//             placeholder="Device Model"
+//             value={deviceModel}
+//             onChange={(e) => setDeviceModel(e.target.value)}
+//             className="border p-2 rounded w-full"
+//           />
+
+//           <input
+//             type="number"
+//             placeholder="Battery Level %"
+//             value={batteryLevel}
+//             min={0}
+//             max={100}
+//             onChange={(e) =>
+//               setBatteryLevel(e.target.value === "" ? "" : Number(e.target.value))
+//             }
+//             className="border p-2 rounded w-full"
+//           />
+
+//           <select
+//             value={deviceStatus}
+//             onChange={(e) => setDeviceStatus(e.target.value)}
+//             className="border p-2 rounded w-full"
+//           >
+//             <option value="offline">Offline</option>
+//             <option value="online">Online</option>
+//             <option value="maintenance">Maintenance</option>
+//             <option value="error">Error</option>
+//           </select>
+
+//           <div className="flex justify-end gap-2">
+//             <button
+//               type="button"
+//               onClick={closeModal}
+//               className="px-4 py-2 border rounded"
+//             >
+//               Close
+//             </button>
+//             <button
+//               type="submit"
+//               className="px-4 py-2 bg-blue-600 text-white rounded"
+//             >
+//               {editingDevice ? "Update" : "Add"}
+//             </button>
+//           </div>
+//         </form>
+//       </div>
+//     </div>
+//   );
+// }
 
 // import { useState, useEffect } from "react";
 // import axios from "axios";

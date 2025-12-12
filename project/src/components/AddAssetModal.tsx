@@ -1,8 +1,11 @@
+// src/components/AddAssetModal.tsx
+
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { X } from "lucide-react";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
 
 // --------------------------
 // INTERFACES
@@ -12,8 +15,7 @@ interface Asset {
   asset_name: string;
   asset_type: string;
   description?: string;
-  registered_location: { latitude: number; longitude: number };
-  radius?: number;
+  registered_location: { latitude: number; longitude: number; radius: number };
 }
 
 interface Device {
@@ -22,19 +24,28 @@ interface Device {
   status: string;
 }
 
-export function AddAssetModal({ isOpen, onClose, onSuccess, editingAsset, viewAsset }: any) {
+export function AddAssetModal({
+  isOpen,
+  onClose,
+  onSuccess,
+  editingAsset,
+  viewAsset,
+}: any) {
   const [formData, setFormData] = useState<Asset>({
     asset_id: "",
     asset_name: "",
     asset_type: "",
-    registered_location: { latitude: 0, longitude: 0 },
-    radius: 0
+    description: "",
+    registered_location: { latitude: 0, longitude: 0, radius: 0 },
   });
 
   const [devices, setDevices] = useState<Device[]>([]);
   const [linkedDevices, setLinkedDevices] = useState<Device[]>([]);
   const [linkModal, setLinkModal] = useState(false);
-  const [linkForm, setLinkForm] = useState({ device_id: "", status: "active" });
+  const [linkForm, setLinkForm] = useState({
+    device_id: "",
+    status: "active",
+  });
 
   const token = localStorage.getItem("auth_token");
 
@@ -57,10 +68,14 @@ export function AddAssetModal({ isOpen, onClose, onSuccess, editingAsset, viewAs
   // --------------------------
   const loadLinkedDevices = async () => {
     if (!formData.asset_id) return;
+
     try {
-      const res = await axios.get(`${API_BASE_URL}/assets/${formData.asset_id}/devices`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await axios.get(
+        `${API_BASE_URL}/assets/${formData.asset_id}/devices`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
 
       const list = Array.isArray(res.data)
         ? res.data
@@ -68,7 +83,6 @@ export function AddAssetModal({ isOpen, onClose, onSuccess, editingAsset, viewAs
 
       setLinkedDevices(list);
     } catch {
-      console.log("Linked device load failed");
       setLinkedDevices([]);
     }
   };
@@ -79,6 +93,7 @@ export function AddAssetModal({ isOpen, onClose, onSuccess, editingAsset, viewAs
   useEffect(() => {
     if (editingAsset) setFormData(editingAsset);
     if (viewAsset) setFormData(viewAsset);
+
     loadDevices();
   }, [editingAsset, viewAsset]);
 
@@ -105,9 +120,9 @@ export function AddAssetModal({ isOpen, onClose, onSuccess, editingAsset, viewAs
         description: formData.description || "",
         registered_location: {
           latitude: Number(formData.registered_location.latitude),
-          longitude: Number(formData.registered_location.longitude)
+          longitude: Number(formData.registered_location.longitude),
+          radius: Number(formData.registered_location.radius),
         },
-        radius: formData.radius ? Number(formData.radius) : undefined
       };
 
       if (editingAsset) {
@@ -117,11 +132,9 @@ export function AddAssetModal({ isOpen, onClose, onSuccess, editingAsset, viewAs
           { headers: { Authorization: `Bearer ${token}` } }
         );
       } else {
-        await axios.post(
-          `${API_BASE_URL}/assets`,
-          payload,
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
+        await axios.post(`${API_BASE_URL}/assets`, payload, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
       }
 
       alert("Asset saved successfully!");
@@ -129,9 +142,7 @@ export function AddAssetModal({ isOpen, onClose, onSuccess, editingAsset, viewAs
       onClose();
     } catch (err: any) {
       console.log(err.response?.data);
-      alert(
-        "Save failed: " + JSON.stringify(err.response?.data, null, 2)
-      );
+      alert("Save failed: " + JSON.stringify(err.response?.data, null, 2));
     }
   };
 
@@ -164,7 +175,6 @@ export function AddAssetModal({ isOpen, onClose, onSuccess, editingAsset, viewAs
       setLinkModal(false);
       alert("Device Linked!");
     } catch (err: any) {
-      console.log(err.response?.data);
       alert("Link failed: " + JSON.stringify(err.response?.data, null, 2));
     }
   };
@@ -174,19 +184,15 @@ export function AddAssetModal({ isOpen, onClose, onSuccess, editingAsset, viewAs
   // --------------------------
   const unlinkDevice = async (device_id: string) => {
     try {
-      await axios.delete(
-        `${API_BASE_URL}/assets/unlink-device`,
-        {
-          params: { asset_id: formData.asset_id, device_id },
-          headers: { Authorization: `Bearer ${token}` }
-        }
-      );
+      await axios.delete(`${API_BASE_URL}/assets/unlink-device`, {
+        params: { asset_id: formData.asset_id, device_id },
+        headers: { Authorization: `Bearer ${token}` },
+      });
 
       loadLinkedDevices();
       alert("Device Unlinked!");
     } catch (err: any) {
-      console.log(err.response?.data);
-      alert("Unlink failed: " + JSON.stringify(err.response?.data, null, 2));
+      alert("Unlink failed");
     }
   };
 
@@ -196,20 +202,16 @@ export function AddAssetModal({ isOpen, onClose, onSuccess, editingAsset, viewAs
   const unlinkAllDevices = async () => {
     try {
       for (const d of linkedDevices) {
-        await axios.delete(
-          `${API_BASE_URL}/assets/unlink-device`,
-          {
-            params: { asset_id: formData.asset_id, device_id: d.device_id },
-            headers: { Authorization: `Bearer ${token}` }
-          }
-        );
+        await axios.delete(`${API_BASE_URL}/assets/unlink-device`, {
+          params: { asset_id: formData.asset_id, device_id: d.device_id },
+          headers: { Authorization: `Bearer ${token}` },
+        });
       }
 
       loadLinkedDevices();
       alert("All devices unlinked!");
     } catch (err: any) {
-      console.log(err.response?.data);
-      alert("Unlink all failed: " + JSON.stringify(err.response?.data, null, 2));
+      alert("Unlink all failed");
     }
   };
 
@@ -222,16 +224,32 @@ export function AddAssetModal({ isOpen, onClose, onSuccess, editingAsset, viewAs
         <div className="bg-white p-6 rounded w-[500px]">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-xl font-semibold">Asset Details</h2>
-            <button onClick={onClose}><X /></button>
+            <button onClick={onClose}>
+              <X />
+            </button>
           </div>
 
-          <p><b>ID:</b> {formData.asset_id}</p>
-          <p><b>Name:</b> {formData.asset_name}</p>
-          <p><b>Type:</b> {formData.asset_type}</p>
-          <p><b>Description:</b> {formData.description}</p>
-          <p><b>Latitude:</b> {formData.registered_location.latitude}</p>
-          <p><b>Longitude:</b> {formData.registered_location.longitude}</p>
-          <p><b>Radius:</b> {formData.radius} m</p>
+          <p>
+            <b>ID:</b> {formData.asset_id}
+          </p>
+          <p>
+            <b>Name:</b> {formData.asset_name}
+          </p>
+          <p>
+            <b>Type:</b> {formData.asset_type}
+          </p>
+          <p>
+            <b>Description:</b> {formData.description}
+          </p>
+          <p>
+            <b>Latitude:</b> {formData.registered_location.latitude}
+          </p>
+          <p>
+            <b>Longitude:</b> {formData.registered_location.longitude}
+          </p>
+          <p>
+            <b>Radius:</b> {formData.registered_location.radius} m
+          </p>
 
           <div className="mt-4">
             <h3 className="font-semibold mb-2">Linked Devices</h3>
@@ -246,7 +264,9 @@ export function AddAssetModal({ isOpen, onClose, onSuccess, editingAsset, viewAs
                 className="border p-2 rounded flex justify-between items-center mb-2"
               >
                 <div>
-                  <p><b>{d.device_id}</b></p>
+                  <p>
+                    <b>{d.device_id}</b>
+                  </p>
                   <p>Status: {d.status}</p>
                 </div>
 
@@ -333,7 +353,6 @@ export function AddAssetModal({ isOpen, onClose, onSuccess, editingAsset, viewAs
               </div>
             </div>
           )}
-
         </div>
       </div>
     );
@@ -349,7 +368,9 @@ export function AddAssetModal({ isOpen, onClose, onSuccess, editingAsset, viewAs
           <h2 className="text-xl font-semibold">
             {editingAsset ? "Edit Asset" : "Add Asset"}
           </h2>
-          <button onClick={onClose}><X /></button>
+          <button onClick={onClose}>
+            <X />
+          </button>
         </div>
 
         <input
@@ -421,9 +442,15 @@ export function AddAssetModal({ isOpen, onClose, onSuccess, editingAsset, viewAs
         <input
           placeholder="Radius (m)"
           className="border w-full p-2 mb-4"
-          value={formData.radius}
+          value={formData.registered_location.radius}
           onChange={(e) =>
-            setFormData({ ...formData, radius: parseFloat(e.target.value) })
+            setFormData({
+              ...formData,
+              registered_location: {
+                ...formData.registered_location,
+                radius: parseFloat(e.target.value),
+              },
+            })
           }
         />
 
@@ -442,6 +469,450 @@ export function AddAssetModal({ isOpen, onClose, onSuccess, editingAsset, viewAs
     </div>
   );
 }
+// import { useEffect, useState } from "react";
+// import axios from "axios";
+// import { X } from "lucide-react";
+
+// const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
+
+// // --------------------------
+// // INTERFACES
+// // --------------------------
+// interface Asset {
+//   asset_id: string;
+//   asset_name: string;
+//   asset_type: string;
+//   description?: string;
+//   registered_location: { latitude: number; longitude: number };
+//   radius?: number;
+// }
+
+// interface Device {
+//   device_id: string;
+//   name?: string;
+//   status: string;
+// }
+
+// export function AddAssetModal({ isOpen, onClose, onSuccess, editingAsset, viewAsset }: any) {
+//   const [formData, setFormData] = useState<Asset>({
+//     asset_id: "",
+//     asset_name: "",
+//     asset_type: "",
+//     registered_location: { latitude: 0, longitude: 0 },
+//     radius: 0
+//   });
+
+//   const [devices, setDevices] = useState<Device[]>([]);
+//   const [linkedDevices, setLinkedDevices] = useState<Device[]>([]);
+//   const [linkModal, setLinkModal] = useState(false);
+//   const [linkForm, setLinkForm] = useState({ device_id: "", status: "active" });
+
+//   const token = localStorage.getItem("auth_token");
+
+//   // --------------------------
+//   // LOAD DEVICES
+//   // --------------------------
+//   const loadDevices = async () => {
+//     try {
+//       const res = await axios.get(`${API_BASE_URL}/devices`, {
+//         headers: { Authorization: `Bearer ${token}` },
+//       });
+//       setDevices(res.data || []);
+//     } catch {
+//       console.log("Device load failed");
+//     }
+//   };
+
+//   // --------------------------
+//   // LOAD LINKED DEVICES
+//   // --------------------------
+//   const loadLinkedDevices = async () => {
+//     if (!formData.asset_id) return;
+//     try {
+//       const res = await axios.get(`${API_BASE_URL}/assets/${formData.asset_id}/devices`, {
+//         headers: { Authorization: `Bearer ${token}` },
+//       });
+
+//       const list = Array.isArray(res.data)
+//         ? res.data
+//         : res.data.linked_devices || [];
+
+//       setLinkedDevices(list);
+//     } catch {
+//       console.log("Linked device load failed");
+//       setLinkedDevices([]);
+//     }
+//   };
+
+//   // --------------------------
+//   // INITIAL LOAD
+//   // --------------------------
+//   useEffect(() => {
+//     if (editingAsset) setFormData(editingAsset);
+//     if (viewAsset) setFormData(viewAsset);
+//     loadDevices();
+//   }, [editingAsset, viewAsset]);
+
+//   useEffect(() => {
+//     loadLinkedDevices();
+//   }, [formData.asset_id]);
+
+//   if (!isOpen) return null;
+
+//   // --------------------------
+//   // SAVE ASSET
+//   // --------------------------
+//   const handleSave = async () => {
+//     if (!formData.asset_id || !formData.asset_name || !formData.asset_type) {
+//       alert("Asset ID, Name, and Type are required.");
+//       return;
+//     }
+
+//     try {
+//       const payload = {
+//         asset_id: formData.asset_id,
+//         asset_name: formData.asset_name,
+//         asset_type: formData.asset_type,
+//         description: formData.description || "",
+//         registered_location: {
+//           latitude: Number(formData.registered_location.latitude),
+//           longitude: Number(formData.registered_location.longitude)
+//         },
+//         radius: formData.radius ? Number(formData.radius) : undefined
+//       };
+
+//       if (editingAsset) {
+//         await axios.put(
+//           `${API_BASE_URL}/assets/by-asset/${formData.asset_id}`,
+//           payload,
+//           { headers: { Authorization: `Bearer ${token}` } }
+//         );
+//       } else {
+//         await axios.post(
+//           `${API_BASE_URL}/assets`,
+//           payload,
+//           { headers: { Authorization: `Bearer ${token}` } }
+//         );
+//       }
+
+//       alert("Asset saved successfully!");
+//       onSuccess();
+//       onClose();
+//     } catch (err: any) {
+//       console.log(err.response?.data);
+//       alert(
+//         "Save failed: " + JSON.stringify(err.response?.data, null, 2)
+//       );
+//     }
+//   };
+
+//   // --------------------------
+//   // LINK DEVICE
+//   // --------------------------
+//   const linkDevice = async () => {
+//     if (!linkForm.device_id) {
+//       alert("Select a device first.");
+//       return;
+//     }
+
+//     if (linkedDevices.some((d) => d.device_id === linkForm.device_id)) {
+//       alert("Device already linked. Unlink first.");
+//       return;
+//     }
+
+//     try {
+//       await axios.post(
+//         `${API_BASE_URL}/assets/link-device`,
+//         {
+//           asset_id: formData.asset_id,
+//           device_id: linkForm.device_id,
+//           status: linkForm.status,
+//         },
+//         { headers: { Authorization: `Bearer ${token}` } }
+//       );
+
+//       loadLinkedDevices();
+//       setLinkModal(false);
+//       alert("Device Linked!");
+//     } catch (err: any) {
+//       console.log(err.response?.data);
+//       alert("Link failed: " + JSON.stringify(err.response?.data, null, 2));
+//     }
+//   };
+
+//   // --------------------------
+//   // UNLINK SINGLE DEVICE
+//   // --------------------------
+//   const unlinkDevice = async (device_id: string) => {
+//     try {
+//       await axios.delete(
+//         `${API_BASE_URL}/assets/unlink-device`,
+//         {
+//           params: { asset_id: formData.asset_id, device_id },
+//           headers: { Authorization: `Bearer ${token}` }
+//         }
+//       );
+
+//       loadLinkedDevices();
+//       alert("Device Unlinked!");
+//     } catch (err: any) {
+//       console.log(err.response?.data);
+//       alert("Unlink failed: " + JSON.stringify(err.response?.data, null, 2));
+//     }
+//   };
+
+//   // --------------------------
+//   // UNLINK ALL DEVICES
+//   // --------------------------
+//   const unlinkAllDevices = async () => {
+//     try {
+//       for (const d of linkedDevices) {
+//         await axios.delete(
+//           `${API_BASE_URL}/assets/unlink-device`,
+//           {
+//             params: { asset_id: formData.asset_id, device_id: d.device_id },
+//             headers: { Authorization: `Bearer ${token}` }
+//           }
+//         );
+//       }
+
+//       loadLinkedDevices();
+//       alert("All devices unlinked!");
+//     } catch (err: any) {
+//       console.log(err.response?.data);
+//       alert("Unlink all failed: " + JSON.stringify(err.response?.data, null, 2));
+//     }
+//   };
+
+//   // --------------------------
+//   // VIEW MODE
+//   // --------------------------
+//   if (viewAsset) {
+//     return (
+//       <div className="fixed inset-0 bg-black/40 flex justify-center items-center">
+//         <div className="bg-white p-6 rounded w-[500px]">
+//           <div className="flex justify-between items-center mb-4">
+//             <h2 className="text-xl font-semibold">Asset Details</h2>
+//             <button onClick={onClose}><X /></button>
+//           </div>
+
+//           <p><b>ID:</b> {formData.asset_id}</p>
+//           <p><b>Name:</b> {formData.asset_name}</p>
+//           <p><b>Type:</b> {formData.asset_type}</p>
+//           <p><b>Description:</b> {formData.description}</p>
+//           <p><b>Latitude:</b> {formData.registered_location.latitude}</p>
+//           <p><b>Longitude:</b> {formData.registered_location.longitude}</p>
+//           <p><b>Radius:</b> {formData.radius} m</p>
+
+//           <div className="mt-4">
+//             <h3 className="font-semibold mb-2">Linked Devices</h3>
+
+//             {linkedDevices.length === 0 && (
+//               <p className="text-sm text-gray-500">No devices linked</p>
+//             )}
+
+//             {linkedDevices.map((d) => (
+//               <div
+//                 key={d.device_id}
+//                 className="border p-2 rounded flex justify-between items-center mb-2"
+//               >
+//                 <div>
+//                   <p><b>{d.device_id}</b></p>
+//                   <p>Status: {d.status}</p>
+//                 </div>
+
+//                 <button
+//                   onClick={() => unlinkDevice(d.device_id)}
+//                   className="text-red-600 border px-2 py-1 rounded"
+//                 >
+//                   Unlink
+//                 </button>
+//               </div>
+//             ))}
+
+//             <div className="flex gap-3 mt-3">
+//               <button
+//                 onClick={() => setLinkModal(true)}
+//                 className="px-4 py-2 bg-blue-600 text-white rounded"
+//               >
+//                 Link Device
+//               </button>
+
+//               <button
+//                 onClick={unlinkAllDevices}
+//                 className="px-4 py-2 bg-red-600 text-white rounded"
+//               >
+//                 Unlink All
+//               </button>
+//             </div>
+//           </div>
+
+//           <div className="mt-6 text-right">
+//             <button onClick={onClose} className="px-4 py-2 border rounded">
+//               Close
+//             </button>
+//           </div>
+
+//           {/* LINK DEVICE POPUP */}
+//           {linkModal && (
+//             <div className="fixed inset-0 bg-black/40 flex justify-center items-center">
+//               <div className="bg-white p-4 rounded w-[350px]">
+//                 <h3 className="font-semibold mb-3">Link Device</h3>
+
+//                 <label>Device ID:</label>
+//                 <select
+//                   className="w-full border p-2 mb-3"
+//                   value={linkForm.device_id}
+//                   onChange={(e) =>
+//                     setLinkForm({ ...linkForm, device_id: e.target.value })
+//                   }
+//                 >
+//                   <option value="">Select</option>
+//                   {devices.map((d) => (
+//                     <option key={d.device_id} value={d.device_id}>
+//                       {d.device_id}
+//                     </option>
+//                   ))}
+//                 </select>
+
+//                 <label>Status:</label>
+//                 <select
+//                   className="w-full border p-2 mb-3"
+//                   value={linkForm.status}
+//                   onChange={(e) =>
+//                     setLinkForm({ ...linkForm, status: e.target.value })
+//                   }
+//                 >
+//                   <option value="active">active</option>
+//                   <option value="inactive">inactive</option>
+//                 </select>
+
+//                 <div className="flex justify-end gap-2">
+//                   <button
+//                     onClick={() => setLinkModal(false)}
+//                     className="px-3 py-1 border rounded"
+//                   >
+//                     Cancel
+//                   </button>
+//                   <button
+//                     onClick={linkDevice}
+//                     className="px-3 py-1 bg-blue-600 text-white rounded"
+//                   >
+//                     Link
+//                   </button>
+//                 </div>
+//               </div>
+//             </div>
+//           )}
+
+//         </div>
+//       </div>
+//     );
+//   }
+
+//   // --------------------------
+//   // ADD / EDIT MODE
+//   // --------------------------
+//   return (
+//     <div className="fixed inset-0 bg-black/40 flex justify-center items-center">
+//       <div className="bg-white p-6 rounded w-[500px]">
+//         <div className="flex justify-between items-center mb-4">
+//           <h2 className="text-xl font-semibold">
+//             {editingAsset ? "Edit Asset" : "Add Asset"}
+//           </h2>
+//           <button onClick={onClose}><X /></button>
+//         </div>
+
+//         <input
+//           placeholder="Asset ID"
+//           className="border w-full p-2 mb-2"
+//           value={formData.asset_id}
+//           onChange={(e) =>
+//             setFormData({ ...formData, asset_id: e.target.value })
+//           }
+//         />
+
+//         <input
+//           placeholder="Name"
+//           className="border w-full p-2 mb-2"
+//           value={formData.asset_name}
+//           onChange={(e) =>
+//             setFormData({ ...formData, asset_name: e.target.value })
+//           }
+//         />
+
+//         <input
+//           placeholder="Type"
+//           className="border w-full p-2 mb-2"
+//           value={formData.asset_type}
+//           onChange={(e) =>
+//             setFormData({ ...formData, asset_type: e.target.value })
+//           }
+//         />
+
+//         <textarea
+//           placeholder="Description"
+//           className="border w-full p-2 mb-2"
+//           value={formData.description}
+//           onChange={(e) =>
+//             setFormData({ ...formData, description: e.target.value })
+//           }
+//         />
+
+//         <input
+//           placeholder="Latitude"
+//           className="border w-full p-2 mb-2"
+//           value={formData.registered_location.latitude}
+//           onChange={(e) =>
+//             setFormData({
+//               ...formData,
+//               registered_location: {
+//                 ...formData.registered_location,
+//                 latitude: parseFloat(e.target.value),
+//               },
+//             })
+//           }
+//         />
+
+//         <input
+//           placeholder="Longitude"
+//           className="border w-full p-2 mb-2"
+//           value={formData.registered_location.longitude}
+//           onChange={(e) =>
+//             setFormData({
+//               ...formData,
+//               registered_location: {
+//                 ...formData.registered_location,
+//                 longitude: parseFloat(e.target.value),
+//               },
+//             })
+//           }
+//         />
+
+//         <input
+//           placeholder="Radius (m)"
+//           className="border w-full p-2 mb-4"
+//           value={formData.radius}
+//           onChange={(e) =>
+//             setFormData({ ...formData, radius: parseFloat(e.target.value) })
+//           }
+//         />
+
+//         <div className="text-right">
+//           <button onClick={onClose} className="px-4 py-2 border rounded mr-2">
+//             Cancel
+//           </button>
+//           <button
+//             onClick={handleSave}
+//             className="px-4 py-2 bg-blue-600 text-white rounded"
+//           >
+//             Save
+//           </button>
+//         </div>
+//       </div>
+//     </div>
+//   );
+// }
 
 // import { useEffect, useState } from "react";
 // import axios from "axios";
