@@ -24,5 +24,17 @@ export default defineConfig({
   define: {
     // prevents some libs from erroring when they reference process.env
     'process.env': {}
+  },
+  build: {
+    chunkSizeWarningLimit: 600,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor': ['react', 'react-dom', 'react-router-dom'],
+          'leaflet': ['leaflet', 'react-leaflet'],
+          'mapbox': ['mapbox-gl', 'react-map-gl'],
+        }
+      }
+    }
   }
 });
