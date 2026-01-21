@@ -88,6 +88,30 @@ export function AddAssetModal({
   };
 
   // --------------------------
+// FETCH ASSET BY ASSET ID
+// --------------------------
+const fetchAssetById = async (assetId: string) => {
+  try {
+    const res = await axios.get(
+      `${API_BASE_URL}/assets/by-asset/${assetId}`,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      }
+    );
+
+    setFormData(res.data);
+  } catch (err) {
+    console.log("Asset not found");
+  }
+};
+
+const extractAssetId = (value: string) => {
+  const match = value.trim().match(/^[a-zA-Z0-9]+/);
+  return match ? match[0] : "";
+};
+
+
+  // --------------------------
   // INITIAL LOAD
   // --------------------------
   useEffect(() => {
@@ -102,6 +126,8 @@ export function AddAssetModal({
   }, [formData.asset_id]);
 
   if (!isOpen) return null;
+
+  
 
   // --------------------------
   // SAVE ASSET
@@ -373,14 +399,30 @@ export function AddAssetModal({
           </button>
         </div>
 
-        <input
+        {/* <input
           placeholder="Asset ID"
           className="border w-full p-2 mb-2"
           value={formData.asset_id}
           onChange={(e) =>
             setFormData({ ...formData, asset_id: e.target.value })
           }
-        />
+        /> */}
+        <input
+  placeholder="Asset ID (e.g. ass001Ashok Leyland)"
+  className="border w-full p-2 mb-2"
+  value={formData.asset_id}
+  onChange={(e) => {
+    const rawValue = e.target.value;
+    const extractedId = extractAssetId(rawValue);
+
+    setFormData({ ...formData, asset_id: rawValue });
+
+    if (extractedId && extractedId.length >= 3) {
+      fetchAssetById(extractedId);
+    }
+  }}
+/>
+
 
         <input
           placeholder="Name"
@@ -409,7 +451,7 @@ export function AddAssetModal({
           }
         />
 
-        <input
+        {/* <input
           placeholder="Latitude"
           className="border w-full p-2 mb-2"
           value={formData.registered_location.latitude}
@@ -452,7 +494,58 @@ export function AddAssetModal({
               },
             })
           }
-        />
+        /> */}
+        <input
+  placeholder="Latitude"
+  className="border w-full p-2 mb-2"
+  type="number"
+  step="00.000000"
+  value={formData.registered_location.latitude}
+  onChange={(e) =>
+    setFormData({
+      ...formData,
+      registered_location: {
+        ...formData.registered_location,
+        latitude: parseFloat(e.target.value) || 0,
+      },
+    })
+  }
+/>
+
+<input
+  placeholder="Longitude"
+  className="border w-full p-2 mb-2"
+  type="number"
+  step="00.000000"
+  value={formData.registered_location.longitude}
+  onChange={(e) =>
+    setFormData({
+      ...formData,
+      registered_location: {
+        ...formData.registered_location,
+        longitude: parseFloat(e.target.value) || 0,
+      },
+    })
+  }
+/>
+
+<input
+  placeholder="Radius (m)"
+  className="border w-full p-2 mb-4"
+  type="number"
+  step="00000"
+  value={formData.registered_location.radius}
+  onChange={(e) =>
+    setFormData({
+      ...formData,
+      registered_location: {
+        ...formData.registered_location,
+        radius: parseFloat(e.target.value) || 0,
+      },
+    })
+  }
+/>
+
 
         <div className="text-right">
           <button onClick={onClose} className="px-4 py-2 border rounded mr-2">

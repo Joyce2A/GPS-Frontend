@@ -3,34 +3,38 @@ import { Loader2, X } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 
 export function AuthPage() {
-  const { signIn, signUp, forgotPassword, resetPassword } = useAuth();
+  const {
+    signIn,
+    signUp,
+    verifyEmail,
+    forgotPassword,
+    resetPassword,
+  } = useAuth();
 
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [otp, setOtp] = useState("");
+
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
 
+  // 🔐 Reset modal
   const [showResetModal, setShowResetModal] = useState(false);
-  const [resetToken, setResetToken] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [resetError, setResetError] = useState("");
   const [resetSuccess, setResetSuccess] = useState("");
 
-  // ---------- Handlers ----------
+  // ---------- LOGIN ----------
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(""); setSuccess(""); setLoading(true);
+    setError("");
+    setSuccess("");
+    setLoading(true);
+
     try {
-      if (isSignUp) {
-        await signUp(email, password);
-        setSuccess("Account created! Please log in.");
-        setIsSignUp(false);
-        setPassword("");
-      } else {
-        await signIn(email, password);
-      }
+      await signIn(email, password);
     } catch (err: any) {
       setError(err.message || "Something went wrong");
     } finally {
@@ -38,72 +42,142 @@ export function AuthPage() {
     }
   };
 
-  const handleForgotPassword = async () => {
-    if (!email) return setError("Enter your email first.");
-    setError(""); setSuccess(""); setLoading(true);
+  // ---------- SEND OTP (SIGN UP) ----------
+  const handleSignUp = async () => {
+    if (!email || !password) {
+      setError("Email and password are required.");
+      return;
+    }
+
+    setError("");
+    setSuccess("");
+    setLoading(true);
+
     try {
-      await forgotPassword(email);
-      setShowResetModal(true);
-      setSuccess("Check your email for the reset link.");
+      await signUp(email, password);
+      setSuccess("OTP sent to your email. Please verify.");
     } catch (err: any) {
-      setError(err.message || "Failed to send reset request.");
+      setError(err.message || "Signup failed");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleResetSubmit = async () => {
-    setResetError(""); setResetSuccess("");
-    if (!newPassword) return setResetError("Enter a new password.");
-    if (!resetToken) return setResetError("Enter the reset token from email.");
+  // ---------- VERIFY EMAIL ----------
+  const handleVerifyEmail = async () => {
+    if (!otp) {
+      setError("OTP is required.");
+      return;
+    }
+
+    setError("");
+    setSuccess("");
+    setLoading(true);
 
     try {
-      await resetPassword(resetToken, newPassword);
-      setResetSuccess("Password updated successfully!");
-      setNewPassword("");
-      setResetToken("");
-      setShowResetModal(false);
+      await verifyEmail(otp);
+      setSuccess("Email verified successfully. You can now sign in.");
+      setIsSignUp(false);
+      setPassword("");
+      setOtp("");
     } catch (err: any) {
-      setResetError(err.message || "Reset failed.");
+      setError(err.message || "Email verification failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ---------- FORGOT PASSWORD ----------
+  const handleForgotPassword = async () => {
+    if (!email) {
+      setError("Please enter your email first.");
+      return;
+    }
+
+    setError("");
+    setSuccess("");
+    setLoading(true);
+
+    try {
+      await forgotPassword(email);
+      setShowResetModal(true);
+      setOtp("");
+      setNewPassword("");
+      setSuccess("OTP sent to your email.");
+    } catch (err: any) {
+      setError(err.message || "Failed to send OTP.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ---------- RESET PASSWORD ----------
+  const handleResetSubmit = async () => {
+    setResetError("");
+    setResetSuccess("");
+
+    if (!otp || !newPassword) {
+      setResetError("OTP and new password are required.");
+      return;
+    }
+
+    try {
+      await resetPassword(otp, newPassword);
+      setResetSuccess("Password updated successfully!");
+      setShowResetModal(false);
+      setOtp("");
+      setNewPassword("");
+    } catch (err: any) {
+      setResetError(err.message || "Password reset failed.");
     }
   };
 
   return (
     <div className="min-h-screen relative flex items-center justify-center px-6">
-      {/* Background */}
-      <div className="absolute inset-0 bg-cover bg-center filter blur-sm" style={{ backgroundImage: "url('/bg-map.jpeg')" }} />
+      <div
+        className="absolute inset-0 bg-cover bg-center blur-sm"
+        style={{ backgroundImage: "url('/bg-map.jpeg')" }}
+      />
       <div className="absolute inset-0 bg-white/60 backdrop-blur-md" />
 
       <div className="relative flex w-full max-w-6xl items-center justify-between">
-        {/* Illustration */}
         <div className="hidden md:block w-1/2 pr-12">
-          <h1 className="text-5xl font-bold text-blue-700 mb-4 drop-shadow">GPS Tracker</h1>
-          <p className="text-lg text-gray-800 mb-8">Track assets in real-time and manage devices securely.</p>
-          <img src="/illustration1.png" className="w-full max-w-md" alt="Illustration" />
+          <h1 className="text-5xl font-bold text-blue-700 mb-4">GPS Tracker</h1>
+          <p className="text-lg text-gray-800 mb-8">
+            Track assets in real-time and manage devices securely.
+          </p>
+          <img src="/illustration1.png" className="w-full max-w-md" />
         </div>
 
-        {/* Auth Card */}
         <div className="w-full md:w-1/3">
-          <div className="bg-white shadow-2xl rounded-xl p-6 backdrop-blur-md bg-opacity-90">
-            {error && <div className="p-3 bg-red-100 border border-red-300 text-red-700 rounded-lg">{error}</div>}
-            {success && <div className="p-3 bg-green-100 border border-green-300 text-green-700 rounded-lg">{success}</div>}
+          <div className="bg-white shadow-2xl rounded-xl p-6">
+            {error && (
+              <div className="p-3 bg-red-100 text-red-700 rounded mb-2">
+                {error}
+              </div>
+            )}
+            {success && (
+              <div className="p-3 bg-green-100 text-green-700 rounded mb-2">
+                {success}
+              </div>
+            )}
 
-            <form onSubmit={handleSubmit} className="space-y-4 mt-4">
+            <form onSubmit={handleSubmit} className="space-y-4">
               <input
                 type="email"
                 placeholder="Email address"
-                className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 bg-white/90"
+                className="w-full px-4 py-3 border rounded-lg"
                 value={email}
-                onChange={e => setEmail(e.target.value)}
+                onChange={(e) => setEmail(e.target.value)}
                 required
               />
 
               <input
                 type="password"
                 placeholder="Password"
-                className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 bg-white/90"
+                className="w-full px-4 py-3 border rounded-lg"
                 value={password}
-                onChange={e => setPassword(e.target.value)}
+                onChange={(e) => setPassword(e.target.value)}
                 required
               />
 
@@ -111,21 +185,57 @@ export function AuthPage() {
                 <div className="text-right">
                   <button
                     type="button"
-                    className="text-blue-600 text-sm hover:underline"
                     onClick={handleForgotPassword}
+                    className="text-blue-600 text-sm hover:underline"
                   >
                     Forgot Password?
                   </button>
                 </div>
               )}
 
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition flex items-center justify-center"
-              >
-                {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : isSignUp ? "Create Account" : "Log In"}
-              </button>
+              {!isSignUp && (
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full bg-blue-600 text-white py-3 rounded-lg flex justify-center"
+                >
+                  {loading ? <Loader2 className="animate-spin" /> : "Sign In"}
+                </button>
+              )}
+
+              {isSignUp && (
+                <>
+                  <button
+                    type="button"
+                    onClick={handleSignUp}
+                    disabled={loading}
+                    className="w-full bg-blue-600 text-white py-3 rounded-lg"
+                  >
+                    Create Account
+                  </button>
+
+                  <input
+                    type="text"
+                    placeholder="Enter OTP"
+                    className="w-full px-4 py-3 border rounded-lg"
+                    value={otp}
+                    onChange={(e) => setOtp(e.target.value)}
+                  />
+
+                  <button
+                    type="button"
+                    onClick={handleVerifyEmail}
+                    disabled={loading}
+                    className="w-full bg-indigo-600 text-white py-3 rounded-lg flex justify-center"
+                  >
+                    {loading ? (
+                      <Loader2 className="animate-spin" />
+                    ) : (
+                      "Verify Email"
+                    )}
+                  </button>
+                </>
+              )}
             </form>
 
             <div className="flex items-center my-4">
@@ -135,51 +245,51 @@ export function AuthPage() {
             </div>
 
             <button
-              onClick={() => { setIsSignUp(!isSignUp); setError(""); setSuccess(""); setPassword(""); }}
-              className="w-full bg-green-600 text-white py-3 rounded-lg hover:bg-green-700"
+              onClick={() => {
+                setIsSignUp(!isSignUp);
+                setError("");
+                setSuccess("");
+                setPassword("");
+                setOtp("");
+              }}
+              className="w-full bg-green-600 text-white py-3 rounded-lg"
             >
-              {isSignUp ? "Sign In Instead" : "Create New Account"}
+              {isSignUp ? "Sign In Instead" : "Sign Up / Create Account"}
             </button>
           </div>
         </div>
       </div>
 
-      {/* Reset Modal */}
       {showResetModal && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-          <div className="bg-white p-6 rounded-xl w-full max-w-md shadow-xl relative">
-            <button className="absolute right-3 top-3" onClick={() => setShowResetModal(false)}>
-              <X className="w-5 h-5" />
+        <div className="fixed inset-0 flex items-center justify-center bg-black/40">
+          <div className="bg-white p-6 rounded-xl w-full max-w-md relative">
+            <button
+              className="absolute right-3 top-3"
+              onClick={() => setShowResetModal(false)}
+            >
+              <X />
             </button>
-            <h2 className="text-xl font-bold mb-2">Reset Password</h2>
-            <p className="text-gray-600 text-sm mb-4">Enter the token sent to your email and your new password.</p>
 
-            {resetError && <div className="p-2 bg-red-100 text-red-700 rounded mb-2">{resetError}</div>}
-            {resetSuccess && <div className="p-2 bg-green-100 text-green-700 rounded mb-2">{resetSuccess}</div>}
+            <h2 className="text-xl font-bold mb-3">Reset Password</h2>
 
-            <div className="mt-2">
-              <label className="text-sm font-medium">Reset Token</label>
-              <input
-                className="w-full border p-2 rounded mt-1"
-                value={resetToken}
-                onChange={e => setResetToken(e.target.value)}
-                placeholder="Paste the token from email"
-              />
-            </div>
+            <input
+              className="w-full border p-2 rounded mb-3"
+              placeholder="Enter OTP"
+              value={otp}
+              onChange={(e) => setOtp(e.target.value)}
+            />
 
-            <div className="mt-2">
-              <label className="text-sm font-medium">New Password</label>
-              <input
-                type="password"
-                className="w-full border p-2 rounded mt-1"
-                value={newPassword}
-                onChange={e => setNewPassword(e.target.value)}
-              />
-            </div>
+            <input
+              type="password"
+              className="w-full border p-2 rounded"
+              placeholder="New password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+            />
 
             <button
               onClick={handleResetSubmit}
-              className="w-full mt-4 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700"
+              className="w-full mt-4 bg-blue-600 text-white py-2 rounded-lg"
             >
               Update Password
             </button>
@@ -189,6 +299,457 @@ export function AuthPage() {
     </div>
   );
 }
+
+// import { useState } from "react";
+// import { Loader2, X } from "lucide-react";
+// import { useAuth } from "../contexts/AuthContext";
+
+// export function AuthPage() {
+//   const { signIn, signUp, forgotPassword, resetPassword } = useAuth();
+
+//   const [isSignUp, setIsSignUp] = useState(false);
+//   const [email, setEmail] = useState("");
+//   const [password, setPassword] = useState("");
+//   const [error, setError] = useState("");
+//   const [success, setSuccess] = useState("");
+//   const [loading, setLoading] = useState(false);
+
+//   // 🔐 Reset modal
+//   const [showResetModal, setShowResetModal] = useState(false);
+//   const [otp, setOtp] = useState("");
+//   const [newPassword, setNewPassword] = useState("");
+//   const [resetError, setResetError] = useState("");
+//   const [resetSuccess, setResetSuccess] = useState("");
+
+//   // ---------- LOGIN / SIGNUP ----------
+//   const handleSubmit = async (e: React.FormEvent) => {
+//     e.preventDefault();
+//     setError("");
+//     setSuccess("");
+//     setLoading(true);
+
+//     try {
+//       if (isSignUp) {
+//         await signUp(email, password, otp);
+//         setSuccess("Account created. Please verify your email.");
+//         setIsSignUp(false);
+//         setPassword("");
+//         setOtp("");
+//       } else {
+//         await signIn(email, password);
+//       }
+//     } catch (err: any) {
+//       setError(err.message || "Something went wrong");
+//     } finally {
+//       setLoading(false);
+//     }
+//   };
+
+//   // ---------- FORGOT PASSWORD ----------
+//   const handleForgotPassword = async () => {
+//     if (!email) {
+//       setError("Please enter your email first.");
+//       return;
+//     }
+
+//     setError("");
+//     setSuccess("");
+//     setLoading(true);
+
+//     try {
+//       await forgotPassword(email);
+//       setShowResetModal(true);
+//       setOtp("");
+//       setNewPassword("");
+//       setSuccess("OTP sent to your email.");
+//     } catch (err: any) {
+//       setError(err.message || "Failed to send OTP.");
+//     } finally {
+//       setLoading(false);
+//     }
+//   };
+
+//   // ---------- RESET PASSWORD ----------
+//   const handleResetSubmit = async () => {
+//     setResetError("");
+//     setResetSuccess("");
+
+//     if (!otp || !newPassword) {
+//       setResetError("OTP and new password are required.");
+//       return;
+//     }
+
+//     try {
+//       await resetPassword(otp, newPassword);
+//       setResetSuccess("Password updated successfully!");
+//       setShowResetModal(false);
+//       setOtp("");
+//       setNewPassword("");
+//     } catch (err: any) {
+//       setResetError(err.message || "Password reset failed.");
+//     }
+//   };
+
+//   return (
+//     <div className="min-h-screen relative flex items-center justify-center px-6">
+//       {/* Background */}
+//       <div
+//         className="absolute inset-0 bg-cover bg-center blur-sm"
+//         style={{ backgroundImage: "url('/bg-map.jpeg')" }}
+//       />
+//       <div className="absolute inset-0 bg-white/60 backdrop-blur-md" />
+
+//       <div className="relative flex w-full max-w-6xl items-center justify-between">
+//         {/* Illustration */}
+//         <div className="hidden md:block w-1/2 pr-12">
+//           <h1 className="text-5xl font-bold text-blue-700 mb-4">
+//             GPS Tracker
+//           </h1>
+//           <p className="text-lg text-gray-800 mb-8">
+//             Track assets in real-time and manage devices securely.
+//           </p>
+//           <img src="/illustration1.png" className="w-full max-w-md" />
+//         </div>
+
+//         {/* Auth Card */}
+//         <div className="w-full md:w-1/3">
+//           <div className="bg-white shadow-2xl rounded-xl p-6">
+//             {error && (
+//               <div className="p-3 bg-red-100 text-red-700 rounded mb-2">
+//                 {error}
+//               </div>
+//             )}
+//             {success && (
+//               <div className="p-3 bg-green-100 text-green-700 rounded mb-2">
+//                 {success}
+//               </div>
+//             )}
+
+//             <form onSubmit={handleSubmit} className="space-y-4">
+//               <input
+//                 type="email"
+//                 placeholder="Email address"
+//                 className="w-full px-4 py-3 border rounded-lg"
+//                 value={email}
+//                 onChange={(e) => setEmail(e.target.value)}
+//                 required
+//               />
+
+//               <input
+//                 type="password"
+//                 placeholder="Password"
+//                 className="w-full px-4 py-3 border rounded-lg"
+//                 value={password}
+//                 onChange={(e) => setPassword(e.target.value)}
+//                 required
+//               />
+
+//               {!isSignUp && (
+//                 <div className="text-right">
+//                   <button
+//                     type="button"
+//                     onClick={handleForgotPassword}
+//                     className="text-blue-600 text-sm hover:underline"
+//                   >
+//                     Forgot Password?
+//                   </button>
+//                 </div>
+//               )}
+
+//               <button
+//                 type="submit"
+//                 disabled={loading}
+//                 className="w-full bg-blue-600 text-white py-3 rounded-lg flex justify-center"
+//               >
+//                 {loading ? (
+//                   <Loader2 className="animate-spin" />
+//                 ) : isSignUp ? (
+//                   "Create Account"
+//                 ) : (
+//                   "Sign In"
+//                 )}
+//               </button>
+
+//               {/* ✅ OTP FIELD MOVED HERE (AFTER CREATE ACCOUNT BUTTON) */}
+//               {isSignUp && (
+//                 <input
+//                   type="text"
+//                   placeholder="Enter OTP"
+//                   className="w-full px-4 py-3 border rounded-lg"
+//                   value={otp}
+//                   onChange={(e) => setOtp(e.target.value)}
+//                   required
+//                 />
+//               )}
+//             </form>
+
+//             <div className="flex items-center my-4">
+//               <div className="flex-1 border-t" />
+//               <span className="px-3 text-gray-500 text-sm">or</span>
+//               <div className="flex-1 border-t" />
+//             </div>
+
+//             <button
+//               onClick={() => {
+//                 setIsSignUp(!isSignUp);
+//                 setError("");
+//                 setSuccess("");
+//                 setPassword("");
+//                 setOtp("");
+//               }}
+//               className="w-full bg-green-600 text-white py-3 rounded-lg"
+//             >
+//               {isSignUp ? "Sign In Instead" : "Sign Up / Create Account"}
+//             </button>
+//           </div>
+//         </div>
+//       </div>
+
+//       {/* RESET PASSWORD MODAL */}
+//       {showResetModal && (
+//         <div className="fixed inset-0 flex items-center justify-center bg-black/40">
+//           <div className="bg-white p-6 rounded-xl w-full max-w-md relative">
+//             <button
+//               className="absolute right-3 top-3"
+//               onClick={() => setShowResetModal(false)}
+//             >
+//               <X />
+//             </button>
+
+//             <h2 className="text-xl font-bold mb-3">Reset Password</h2>
+
+//             {resetError && (
+//               <div className="p-2 bg-red-100 text-red-700 rounded mb-2">
+//                 {resetError}
+//               </div>
+//             )}
+//             {resetSuccess && (
+//               <div className="p-2 bg-green-100 text-green-700 rounded mb-2">
+//                 {resetSuccess}
+//               </div>
+//             )}
+
+//             <input
+//               className="w-full border p-2 rounded mb-3"
+//               placeholder="Enter OTP"
+//               value={otp}
+//               onChange={(e) => setOtp(e.target.value)}
+//             />
+
+//             <input
+//               type="password"
+//               className="w-full border p-2 rounded"
+//               placeholder="New password"
+//               value={newPassword}
+//               onChange={(e) => setNewPassword(e.target.value)}
+//             />
+
+//             <button
+//               onClick={handleResetSubmit}
+//               className="w-full mt-4 bg-blue-600 text-white py-2 rounded-lg"
+//             >
+//               Update Password
+//             </button>
+//           </div>
+//         </div>
+//       )}
+//     </div>
+//   );
+// }
+
+
+
+// import { useState } from "react";
+// import { Loader2, X } from "lucide-react";
+// import { useAuth } from "../contexts/AuthContext";
+
+// export function AuthPage() {
+//   const { signIn, signUp, forgotPassword, resetPassword } = useAuth();
+
+//   const [isSignUp, setIsSignUp] = useState(false);
+//   const [email, setEmail] = useState("");
+//   const [password, setPassword] = useState("");
+//   const [error, setError] = useState("");
+//   const [success, setSuccess] = useState("");
+//   const [loading, setLoading] = useState(false);
+
+//   const [showResetModal, setShowResetModal] = useState(false);
+//   const [resetToken, setResetToken] = useState("");
+//   const [newPassword, setNewPassword] = useState("");
+//   const [resetError, setResetError] = useState("");
+//   const [resetSuccess, setResetSuccess] = useState("");
+
+//   // ---------- Handlers ----------
+//   const handleSubmit = async (e: React.FormEvent) => {
+//     e.preventDefault();
+//     setError(""); setSuccess(""); setLoading(true);
+//     try {
+//       if (isSignUp) {
+//         await signUp(email, password);
+//         setSuccess("Account created! Please log in.");
+//         setIsSignUp(false);
+//         setPassword("");
+//       } else {
+//         await signIn(email, password);
+//       }
+//     } catch (err: any) {
+//       setError(err.message || "Something went wrong");
+//     } finally {
+//       setLoading(false);
+//     }
+//   };
+
+//   const handleForgotPassword = async () => {
+//     if (!email) return setError("Enter your email first.");
+//     setError(""); setSuccess(""); setLoading(true);
+//     try {
+//       await forgotPassword(email);
+//       setShowResetModal(true);
+//       setSuccess("Check your email for the reset link.");
+//     } catch (err: any) {
+//       setError(err.message || "Failed to send reset request.");
+//     } finally {
+//       setLoading(false);
+//     }
+//   };
+
+//   const handleResetSubmit = async () => {
+//     setResetError(""); setResetSuccess("");
+//     if (!newPassword) return setResetError("Enter a new password.");
+//     if (!resetToken) return setResetError("Enter the reset token from email.");
+
+//     try {
+//       await resetPassword(resetToken, newPassword);
+//       setResetSuccess("Password updated successfully!");
+//       setNewPassword("");
+//       setResetToken("");
+//       setShowResetModal(false);
+//     } catch (err: any) {
+//       setResetError(err.message || "Reset failed.");
+//     }
+//   };
+
+//   return (
+//     <div className="min-h-screen relative flex items-center justify-center px-6">
+//       {/* Background */}
+//       <div className="absolute inset-0 bg-cover bg-center filter blur-sm" style={{ backgroundImage: "url('/bg-map.jpeg')" }} />
+//       <div className="absolute inset-0 bg-white/60 backdrop-blur-md" />
+
+//       <div className="relative flex w-full max-w-6xl items-center justify-between">
+//         {/* Illustration */}
+//         <div className="hidden md:block w-1/2 pr-12">
+//           <h1 className="text-5xl font-bold text-blue-700 mb-4 drop-shadow">GPS Tracker</h1>
+//           <p className="text-lg text-gray-800 mb-8">Track assets in real-time and manage devices securely.</p>
+//           <img src="/illustration1.png" className="w-full max-w-md" alt="Illustration" />
+//         </div>
+
+//         {/* Auth Card */}
+//         <div className="w-full md:w-1/3">
+//           <div className="bg-white shadow-2xl rounded-xl p-6 backdrop-blur-md bg-opacity-90">
+//             {error && <div className="p-3 bg-red-100 border border-red-300 text-red-700 rounded-lg">{error}</div>}
+//             {success && <div className="p-3 bg-green-100 border border-green-300 text-green-700 rounded-lg">{success}</div>}
+
+//             <form onSubmit={handleSubmit} className="space-y-4 mt-4">
+//               <input
+//                 type="email"
+//                 placeholder="Email address"
+//                 className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 bg-white/90"
+//                 value={email}
+//                 onChange={e => setEmail(e.target.value)}
+//                 required
+//               />
+
+//               <input
+//                 type="password"
+//                 placeholder="Password"
+//                 className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 bg-white/90"
+//                 value={password}
+//                 onChange={e => setPassword(e.target.value)}
+//                 required
+//               />
+
+//               {!isSignUp && (
+//                 <div className="text-right">
+//                   <button
+//                     type="button"
+//                     className="text-blue-600 text-sm hover:underline"
+//                     onClick={handleForgotPassword}
+//                   >
+//                     Forgot Password?
+//                   </button>
+//                 </div>
+//               )}
+
+//               <button
+//                 type="submit"
+//                 disabled={loading}
+//                 className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition flex items-center justify-center"
+//               >
+//                 {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : isSignUp ? "Create Account" : "Log In"}
+//               </button>
+//             </form>
+
+//             <div className="flex items-center my-4">
+//               <div className="flex-1 border-t" />
+//               <span className="px-3 text-gray-500 text-sm">or</span>
+//               <div className="flex-1 border-t" />
+//             </div>
+
+//             <button
+//               onClick={() => { setIsSignUp(!isSignUp); setError(""); setSuccess(""); setPassword(""); }}
+//               className="w-full bg-green-600 text-white py-3 rounded-lg hover:bg-green-700"
+//             >
+//               {isSignUp ? "Sign In Instead" : "Create New Account"}
+//             </button>
+//           </div>
+//         </div>
+//       </div>
+
+//       {/* Reset Modal */}
+//       {showResetModal && (
+//         <div className="fixed inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+//           <div className="bg-white p-6 rounded-xl w-full max-w-md shadow-xl relative">
+//             <button className="absolute right-3 top-3" onClick={() => setShowResetModal(false)}>
+//               <X className="w-5 h-5" />
+//             </button>
+//             <h2 className="text-xl font-bold mb-2">Reset Password</h2>
+//             <p className="text-gray-600 text-sm mb-4">Enter the token sent to your email and your new password.</p>
+
+//             {resetError && <div className="p-2 bg-red-100 text-red-700 rounded mb-2">{resetError}</div>}
+//             {resetSuccess && <div className="p-2 bg-green-100 text-green-700 rounded mb-2">{resetSuccess}</div>}
+
+//             <div className="mt-2">
+//               <label className="text-sm font-medium">Reset Token</label>
+//               <input
+//                 className="w-full border p-2 rounded mt-1"
+//                 value={resetToken}
+//                 onChange={e => setResetToken(e.target.value)}
+//                 placeholder="Paste the token from email"
+//               />
+//             </div>
+
+//             <div className="mt-2">
+//               <label className="text-sm font-medium">New Password</label>
+//               <input
+//                 type="password"
+//                 className="w-full border p-2 rounded mt-1"
+//                 value={newPassword}
+//                 onChange={e => setNewPassword(e.target.value)}
+//               />
+//             </div>
+
+//             <button
+//               onClick={handleResetSubmit}
+//               className="w-full mt-4 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700"
+//             >
+//               Update Password
+//             </button>
+//           </div>
+//         </div>
+//       )}
+//     </div>
+//   );
+// }
 
 // import { useState } from "react";
 // import { Loader2, X } from "lucide-react";

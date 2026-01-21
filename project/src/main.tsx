@@ -5,6 +5,7 @@ import App from './App.tsx';
 import './index.css';
 import "leaflet/dist/leaflet.css";
 /* If you installed leaflet.markercluster and want cluster CSS: */
+import "maplibre-gl/dist/maplibre-gl.css";
 import "leaflet.markercluster/dist/MarkerCluster.css";
 import "leaflet.markercluster/dist/MarkerCluster.Default.css";
 
@@ -15,6 +16,7 @@ createRoot(document.getElementById('root')!).render(
     </AuthProvider>
   </StrictMode>
 );
+
 // import React from "react";
 // import { createRoot } from "react-dom/client";
 // import App from "./App";

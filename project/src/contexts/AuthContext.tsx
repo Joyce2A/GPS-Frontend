@@ -12,153 +12,154 @@ interface User {
 interface AuthContextType {
   user: User | null;
   loading: boolean;
+
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string) => Promise<void>;
+  verifyEmail: (otp: string) => Promise<void>;
+
   signOut: () => Promise<void>;
-  forgotPassword: (email: string) => Promise<string>; // returns reset token
-  resetPassword: (token: string, newPassword: string) => Promise<void>;
+  forgotPassword: (email: string) => Promise<void>;
+  resetPassword: (otp: string, newPassword: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // 🔁 Restore session
   useEffect(() => {
-    try {
-      const token = getAuthToken();
-      const storedUser = localStorage.getItem("auth_user");
+    const token = getAuthToken();
+    const storedUser = localStorage.getItem("auth_user");
 
-      if (token && storedUser) {
-        setUser(JSON.parse(storedUser));
-      }
-    } catch (error) {
-      console.error("Auth check failed:", error);
-    } finally {
-      setLoading(false);
+    if (token && storedUser) {
+      setUser(JSON.parse(storedUser));
     }
+    setLoading(false);
   }, []);
 
+  // ---------------- LOGIN ----------------
   const signIn = async (email: string, password: string) => {
-    try {
-      const form = new URLSearchParams();
-      form.append("username", email);
-      form.append("password", password);
+    const form = new URLSearchParams();
+    form.append("username", email);
+    form.append("password", password);
 
-      const response = await fetch(`${API_BASE_URL}/auth/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: form,
-      });
+    const res = await fetch(`${API_BASE_URL}/auth/login`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: form,
+    });
 
-      if (!response.ok) {
-        const errData = await response.json().catch(() => ({}));
-        toast.error(errData.detail || "Login failed");
-        throw new Error(errData.detail || "Login failed");
+    const data = await res.json();
+
+    if (!res.ok) {
+      if (res.status === 403) {
+        toast.error("Please verify your email before login");
+      } else {
+        toast.error(data.detail || "Login failed");
       }
-
-      const data = await response.json();
-      const accessToken = data.access_token;
-
-      setAuthToken(accessToken);
-      const userData: User = { id: "unknown", email, created_at: new Date().toISOString() };
-      localStorage.setItem("auth_user", JSON.stringify(userData));
-      setUser(userData);
-
-      toast.success("Login successful!");
-    } catch (error) {
-      console.error("Login error:", error);
-      throw error;
+      throw new Error(data.detail);
     }
+
+    setAuthToken(data.access_token);
+
+    const userData: User = {
+      id: "self",
+      email,
+      created_at: new Date().toISOString(),
+    };
+
+    localStorage.setItem("auth_user", JSON.stringify(userData));
+    setUser(userData);
+
+    toast.success("Login successful");
   };
 
+  // ---------------- REGISTER ----------------
   const signUp = async (email: string, password: string) => {
-    try {
-      const res = await fetch(`${API_BASE_URL}/auth/register`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password, role: "user" }),
-      });
+    const res = await fetch(`${API_BASE_URL}/auth/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password, role: "user" }),
+    });
 
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        toast.error(errData.detail || "Signup failed");
-        throw new Error(errData.detail || "Signup failed");
-      }
+    const data = await res.json();
 
-      toast.success("Signup successful! Please log in.");
-    } catch (error) {
-      console.error("Signup error:", error);
-      throw error;
+    if (!res.ok) {
+      toast.error(data.detail || "Signup failed");
+      throw new Error(data.detail);
     }
+
+    toast.success("OTP sent to email. Please verify.");
   };
 
+  // ---------------- VERIFY EMAIL (OTP) ----------------
+  const verifyEmail = async (otp: string) => {
+    const res = await fetch(`${API_BASE_URL}/auth/verify-email`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ otp }),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      toast.error(data.detail || "Invalid OTP");
+      throw new Error(data.detail);
+    }
+
+    toast.success("Email verified successfully. Please login.");
+  };
+
+  // ---------------- LOGOUT ----------------
   const signOut = async () => {
-    try {
-      const token = getAuthToken();
-      if (token) {
-        await fetch(`${API_BASE_URL}/auth/logout`, {
-          method: "POST",
-          headers: { Authorization: `Bearer ${token}` },
-        });
-      }
-    } catch (error) {
-      console.error("Logout error:", error);
-    } finally {
-      removeAuthToken();
-      localStorage.removeItem("auth_user");
-      setUser(null);
-      toast.success("Logged out");
-    }
+    removeAuthToken();
+    localStorage.removeItem("auth_user");
+    setUser(null);
+    toast.success("Logged out");
   };
 
+  // ---------------- FORGOT PASSWORD ----------------
   const forgotPassword = async (email: string) => {
-    try {
-      const res = await fetch(`${API_BASE_URL}/auth/forgot-password`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
-      });
+    const res = await fetch(`${API_BASE_URL}/auth/forgot-password`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    });
 
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        toast.error(data.detail || "Failed to send reset link");
-        throw new Error(data.detail || "Failed to send reset link");
-      }
-
-      const data = await res.json();
-      toast.success("Check your email for the password reset link");
-      return data.reset_token; // return token for internal use
-    } catch (error) {
-      console.error(error);
-      toast.error("Failed to send reset link");
-      throw error;
+    if (!res.ok) {
+      toast.error("Failed to send OTP");
+      throw new Error("Failed to send OTP");
     }
+
+    toast.success("OTP sent to your email");
   };
 
-  const resetPassword = async (token: string, newPassword: string) => {
-    try {
-      const res = await fetch(`${API_BASE_URL}/auth/reset-password`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, new_password: newPassword }),
-      });
+  // ---------------- RESET PASSWORD ----------------
+  const resetPassword = async (otp: string, newPassword: string) => {
+    const res = await fetch(`${API_BASE_URL}/auth/reset-password`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        token: otp,
+        new_password: newPassword,
+      }),
+    });
 
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        toast.error(data.detail || "Password reset failed");
-        throw new Error(data.detail || "Password reset failed");
-      }
+    const data = await res.json();
 
-      toast.success("Password reset successful!");
-    } catch (error) {
-      console.error(error);
-      toast.error("Password reset failed");
-      throw error;
+    if (!res.ok) {
+      toast.error(data.detail || "Password reset failed");
+      throw new Error(data.detail);
     }
+
+    toast.success("Password updated successfully");
   };
 
   return (
@@ -168,6 +169,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         loading,
         signIn,
         signUp,
+        verifyEmail,
         signOut,
         forgotPassword,
         resetPassword,
@@ -179,10 +181,756 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 }
 
 export function useAuth() {
-  const context = useContext(AuthContext);
-  if (!context) throw new Error("useAuth must be used within an AuthProvider");
-  return context;
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error("useAuth must be used inside AuthProvider");
+  return ctx;
 }
+
+// import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+// import { toast } from "react-toastify";
+// import { setAuthToken, removeAuthToken, getAuthToken } from "../lib/api";
+
+// interface User {
+//   id: string;
+//   email: string;
+//   role?: string;
+//   created_at: string;
+// }
+
+// interface AuthContextType {
+//   user: User | null;
+//   loading: boolean;
+
+//   signIn: (email: string, password: string) => Promise<void>;
+//   signUp: (email: string, password: string) => Promise<void>;
+//   verifyEmail: (otp: string) => Promise<void>;
+
+//   signOut: () => Promise<void>;
+//   forgotPassword: (email: string) => Promise<void>;
+//   resetPassword: (otp: string, newPassword: string) => Promise<void>;
+// }
+
+// const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+// const API_BASE_URL =
+//   import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
+
+// export function AuthProvider({ children }: { children: ReactNode }) {
+//   const [user, setUser] = useState<User | null>(null);
+//   const [loading, setLoading] = useState(true);
+
+//   // 🔁 Restore session
+//   useEffect(() => {
+//     const token = getAuthToken();
+//     const storedUser = localStorage.getItem("auth_user");
+
+//     if (token && storedUser) {
+//       setUser(JSON.parse(storedUser));
+//     }
+//     setLoading(false);
+//   }, []);
+
+//   // ---------------- LOGIN ----------------
+//   const signIn = async (email: string, password: string) => {
+//     const form = new URLSearchParams();
+//     form.append("username", email);
+//     form.append("password", password);
+
+//     const res = await fetch(`${API_BASE_URL}/auth/login`, {
+//       method: "POST",
+//       headers: {
+//         "Content-Type": "application/x-www-form-urlencoded",
+//       },
+//       body: form,
+//     });
+
+//     const data = await res.json();
+
+//     if (!res.ok) {
+//       if (res.status === 403) {
+//         toast.error("Please verify your email before login");
+//       } else {
+//         toast.error(data.detail || "Login failed");
+//       }
+//       throw new Error(data.detail);
+//     }
+
+//     setAuthToken(data.access_token);
+
+//     const userData: User = {
+//       id: "self",
+//       email,
+//       created_at: new Date().toISOString(),
+//     };
+
+//     localStorage.setItem("auth_user", JSON.stringify(userData));
+//     setUser(userData);
+
+//     toast.success("Login successful");
+//   };
+
+//   // ---------------- REGISTER ----------------
+//   const signUp = async (email: string, password: string) => {
+//     const res = await fetch(`${API_BASE_URL}/auth/register`, {
+//       method: "POST",
+//       headers: { "Content-Type": "application/json" },
+//       body: JSON.stringify({ email, password, role: "user" }),
+//     });
+
+//     const data = await res.json();
+
+//     if (!res.ok) {
+//       toast.error(data.detail || "Signup failed");
+//       throw new Error(data.detail);
+//     }
+
+//     toast.success("OTP sent to email. Please verify.");
+//   };
+
+//   // ---------------- VERIFY EMAIL (OTP) ----------------
+//   const verifyEmail = async (otp: string) => {
+//     const res = await fetch(`${API_BASE_URL}/auth/verify-email`, {
+//       method: "POST",
+//       headers: { "Content-Type": "application/json" },
+//       body: JSON.stringify({ otp }),
+//     });
+
+//     const data = await res.json();
+
+//     if (!res.ok) {
+//       toast.error(data.detail || "Invalid OTP");
+//       throw new Error(data.detail);
+//     }
+
+//     toast.success("Email verified successfully. Please login.");
+//   };
+
+//   // ---------------- LOGOUT ----------------
+//   const signOut = async () => {
+//     removeAuthToken();
+//     localStorage.removeItem("auth_user");
+//     setUser(null);
+//     toast.success("Logged out");
+//   };
+
+//   // ---------------- FORGOT PASSWORD ----------------
+//   const forgotPassword = async (email: string) => {
+//     const res = await fetch(`${API_BASE_URL}/auth/forgot-password`, {
+//       method: "POST",
+//       headers: { "Content-Type": "application/json" },
+//       body: JSON.stringify({ email }),
+//     });
+
+//     if (!res.ok) {
+//       toast.error("Failed to send OTP");
+//       throw new Error("Failed to send OTP");
+//     }
+
+//     toast.success("OTP sent to your email");
+//   };
+
+//   // ---------------- RESET PASSWORD ----------------
+//   const resetPassword = async (otp: string, newPassword: string) => {
+//     const res = await fetch(`${API_BASE_URL}/auth/reset-password`, {
+//       method: "POST",
+//       headers: { "Content-Type": "application/json" },
+//       body: JSON.stringify({
+//         token: otp,
+//         new_password: newPassword,
+//       }),
+//     });
+
+//     const data = await res.json();
+
+//     if (!res.ok) {
+//       toast.error(data.detail || "Password reset failed");
+//       throw new Error(data.detail);
+//     }
+
+//     toast.success("Password updated successfully");
+//   };
+
+//   return (
+//     <AuthContext.Provider
+//       value={{
+//         user,
+//         loading,
+//         signIn,
+//         signUp,
+//         verifyEmail,
+//         signOut,
+//         forgotPassword,
+//         resetPassword,
+//       }}
+//     >
+//       {children}
+//     </AuthContext.Provider>
+//   );
+// }
+
+// export function useAuth() {
+//   const ctx = useContext(AuthContext);
+//   if (!ctx) throw new Error("useAuth must be used inside AuthProvider");
+//   return ctx;
+// }
+// import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+// import { toast } from "react-toastify";
+// import { setAuthToken, removeAuthToken, getAuthToken } from "../lib/api";
+
+// interface User {
+//   id: string;
+//   email: string;
+//   role?: string;
+//   created_at: string;
+// }
+
+// interface AuthContextType {
+//   user: User | null;
+//   loading: boolean;
+//   signIn: (email: string, password: string) => Promise<void>;
+//   signUp: (email: string, password: string) => Promise<void>;
+//   signOut: () => Promise<void>;
+//   forgotPassword: (email: string) => Promise<void>;
+//   resetPassword: (otp: string, newPassword: string) => Promise<void>;
+// }
+
+// const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+// const API_BASE_URL =
+//   import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
+
+// export function AuthProvider({ children }: { children: ReactNode }) {
+//   const [user, setUser] = useState<User | null>(null);
+//   const [loading, setLoading] = useState(true);
+
+//   // 🔁 Restore session
+//   useEffect(() => {
+//     const token = getAuthToken();
+//     const storedUser = localStorage.getItem("auth_user");
+
+//     if (token && storedUser) {
+//       setUser(JSON.parse(storedUser));
+//     }
+//     setLoading(false);
+//   }, []);
+
+//   // ---------------- LOGIN ----------------
+//   const signIn = async (email: string, password: string) => {
+//     const form = new URLSearchParams();
+//     form.append("username", email);
+//     form.append("password", password);
+
+//     const res = await fetch(`${API_BASE_URL}/auth/login`, {
+//       method: "POST",
+//       headers: {
+//         "Content-Type": "application/x-www-form-urlencoded",
+//       },
+//       body: form,
+//     });
+
+//     const data = await res.json();
+
+//     if (!res.ok) {
+//       toast.error(data.detail || "Login failed");
+//       throw new Error(data.detail);
+//     }
+
+//     setAuthToken(data.access_token);
+
+//     const userData: User = {
+//       id: "self",
+//       email,
+//       created_at: new Date().toISOString(),
+//     };
+
+//     localStorage.setItem("auth_user", JSON.stringify(userData));
+//     setUser(userData);
+
+//     toast.success("Login successful");
+//   };
+
+//   // ---------------- REGISTER ----------------
+//   const signUp = async (email: string, password: string) => {
+//     const res = await fetch(`${API_BASE_URL}/auth/register`, {
+//       method: "POST",
+//       headers: { "Content-Type": "application/json" },
+//       body: JSON.stringify({ email, password, role: "user" }),
+//     });
+
+//     const data = await res.json();
+
+//     if (!res.ok) {
+//       toast.error(data.detail || "Signup failed");
+//       throw new Error(data.detail);
+//     }
+
+//     toast.success("OTP sent to email. Please verify.");
+//   };
+
+//   // ---------------- LOGOUT ----------------
+//   const signOut = async () => {
+//     removeAuthToken();
+//     localStorage.removeItem("auth_user");
+//     setUser(null);
+//     toast.success("Logged out");
+//   };
+
+//   // ---------------- FORGOT PASSWORD ----------------
+//   const forgotPassword = async (email: string) => {
+//     const res = await fetch(`${API_BASE_URL}/auth/forgot-password`, {
+//       method: "POST",
+//       headers: { "Content-Type": "application/json" },
+//       body: JSON.stringify({ email }),
+//     });
+
+//     if (!res.ok) {
+//       toast.error("Failed to send OTP");
+//       throw new Error("Failed to send OTP");
+//     }
+
+//     toast.success("OTP sent to your email");
+//   };
+
+//   // ---------------- RESET PASSWORD ----------------
+//   const resetPassword = async (otp: string, newPassword: string) => {
+//     const res = await fetch(`${API_BASE_URL}/auth/reset-password`, {
+//       method: "POST",
+//       headers: { "Content-Type": "application/json" },
+//       body: JSON.stringify({
+//         token: otp,
+//         new_password: newPassword,
+//       }),
+//     });
+
+//     const data = await res.json();
+
+//     if (!res.ok) {
+//       toast.error(data.detail || "Password reset failed");
+//       throw new Error(data.detail);
+//     }
+
+//     toast.success("Password updated successfully");
+//   };
+
+//   return (
+//     <AuthContext.Provider
+//       value={{
+//         user,
+//         loading,
+//         signIn,
+//         signUp,
+//         signOut,
+//         forgotPassword,
+//         resetPassword,
+//       }}
+//     >
+//       {children}
+//     </AuthContext.Provider>
+//   );
+// }
+
+// export function useAuth() {
+//   const ctx = useContext(AuthContext);
+//   if (!ctx) throw new Error("useAuth must be used inside AuthProvider");
+//   return ctx;
+// }
+// import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+// import { toast } from "react-toastify";
+// import { setAuthToken, removeAuthToken, getAuthToken } from "../lib/api";
+
+// interface User {
+//   id: string;
+//   email: string;
+//   role?: string;
+//   created_at: string;
+// }
+
+// interface AuthContextType {
+//   user: User | null;
+//   loading: boolean;
+//   signIn: (email: string, password: string) => Promise<void>;
+//   signUp: (email: string, password: string) => Promise<void>;
+//   signOut: () => Promise<void>;
+
+//   // 🔐 OTP-based forgot password
+//   forgotPassword: (email: string) => Promise<void>;
+//   resetPassword: (
+//     email: string,
+//     otp: string,
+//     newPassword: string | null
+//   ) => Promise<void>;
+// }
+
+// const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+// const API_BASE_URL =
+//   import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
+
+// export function AuthProvider({ children }: { children: ReactNode }) {
+//   const [user, setUser] = useState<User | null>(null);
+//   const [loading, setLoading] = useState(true);
+
+//   // 🔁 Restore session
+//   useEffect(() => {
+//     try {
+//       const token = getAuthToken();
+//       const storedUser = localStorage.getItem("auth_user");
+
+//       if (token && storedUser) {
+//         setUser(JSON.parse(storedUser));
+//       }
+//     } catch (error) {
+//       console.error("Auth check failed:", error);
+//     } finally {
+//       setLoading(false);
+//     }
+//   }, []);
+
+//   // ---------------- LOGIN ----------------
+//   const signIn = async (email: string, password: string) => {
+//     try {
+//       const form = new URLSearchParams();
+//       form.append("username", email);
+//       form.append("password", password);
+
+//       const response = await fetch(`${API_BASE_URL}/auth/login`, {
+//         method: "POST",
+//         headers: { "Content-Type": "application/x-www-form-urlencoded" },
+//         body: form,
+//       });
+
+//       if (!response.ok) {
+//         const errData = await response.json().catch(() => ({}));
+//         toast.error(errData.detail || "Login failed");
+//         throw new Error(errData.detail || "Login failed");
+//       }
+
+//       const data = await response.json();
+//       const accessToken = data.access_token;
+
+//       setAuthToken(accessToken);
+
+//       const userData: User = {
+//         id: "unknown",
+//         email,
+//         created_at: new Date().toISOString(),
+//       };
+
+//       localStorage.setItem("auth_user", JSON.stringify(userData));
+//       setUser(userData);
+
+//       toast.success("Login successful!");
+//     } catch (error) {
+//       console.error("Login error:", error);
+//       throw error;
+//     }
+//   };
+
+//   // ---------------- REGISTER ----------------
+//   const signUp = async (email: string, password: string) => {
+//     try {
+//       const res = await fetch(`${API_BASE_URL}/auth/register`, {
+//         method: "POST",
+//         headers: { "Content-Type": "application/json" },
+//         body: JSON.stringify({ email, password, role: "user" }),
+//       });
+
+//       if (!res.ok) {
+//         const errData = await res.json().catch(() => ({}));
+//         toast.error(errData.detail || "Signup failed");
+//         throw new Error(errData.detail || "Signup failed");
+//       }
+
+//       toast.success("Signup successful! Please verify your email.");
+//     } catch (error) {
+//       console.error("Signup error:", error);
+//       throw error;
+//     }
+//   };
+
+//   // ---------------- LOGOUT ----------------
+//   const signOut = async () => {
+//     try {
+//       const token = getAuthToken();
+//       if (token) {
+//         await fetch(`${API_BASE_URL}/auth/logout`, {
+//           method: "POST",
+//           headers: { Authorization: `Bearer ${token}` },
+//         });
+//       }
+//     } catch (error) {
+//       console.error("Logout error:", error);
+//     } finally {
+//       removeAuthToken();
+//       localStorage.removeItem("auth_user");
+//       setUser(null);
+//       toast.success("Logged out");
+//     }
+//   };
+
+//   // ---------------- FORGOT PASSWORD (SEND OTP) ----------------
+//   const forgotPassword = async (email: string) => {
+//     try {
+//       const res = await fetch(`${API_BASE_URL}/auth/forgot-password`, {
+//         method: "POST",
+//         headers: { "Content-Type": "application/json" },
+//         body: JSON.stringify({ email }),
+//       });
+
+//       if (!res.ok) {
+//         const data = await res.json().catch(() => ({}));
+//         toast.error(data.detail || "Failed to send OTP");
+//         throw new Error(data.detail || "Failed to send OTP");
+//       }
+
+//       toast.success("OTP sent to your email");
+//     } catch (error) {
+//       console.error(error);
+//       throw error;
+//     }
+//   };
+
+//   // ---------------- RESET PASSWORD (OTP VERIFY + UPDATE) ----------------
+//   const resetPassword = async (
+//     email: string,
+//     otp: string,
+//     newPassword: string | null
+//   ) => {
+//     try {
+//       const res = await fetch(`${API_BASE_URL}/auth/reset-password`, {
+//         method: "POST",
+//         headers: { "Content-Type": "application/json" },
+//         body: JSON.stringify({
+//           email,
+//           otp,
+//           new_password: newPassword,
+//         }),
+//       });
+
+//       if (!res.ok) {
+//         const data = await res.json().catch(() => ({}));
+//         toast.error(data.detail || "Reset failed");
+//         throw new Error(data.detail || "Reset failed");
+//       }
+
+//       toast.success(
+//         newPassword ? "Password updated successfully!" : "OTP verified"
+//       );
+//     } catch (error) {
+//       console.error(error);
+//       throw error;
+//     }
+//   };
+
+//   return (
+//     <AuthContext.Provider
+//       value={{
+//         user,
+//         loading,
+//         signIn,
+//         signUp,
+//         signOut,
+//         forgotPassword,
+//         resetPassword,
+//       }}
+//     >
+//       {children}
+//     </AuthContext.Provider>
+//   );
+// }
+
+// export function useAuth() {
+//   const context = useContext(AuthContext);
+//   if (!context)
+//     throw new Error("useAuth must be used within an AuthProvider");
+//   return context;
+// }
+
+// import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+// import { toast } from "react-toastify";
+// import { setAuthToken, removeAuthToken, getAuthToken } from "../lib/api";
+
+// interface User {
+//   id: string;
+//   email: string;
+//   role?: string;
+//   created_at: string;
+// }
+
+// interface AuthContextType {
+//   user: User | null;
+//   loading: boolean;
+//   signIn: (email: string, password: string) => Promise<void>;
+//   signUp: (email: string, password: string) => Promise<void>;
+//   signOut: () => Promise<void>;
+//   forgotPassword: (email: string) => Promise<string>; // returns reset token
+//   resetPassword: (token: string, newPassword: string) => Promise<void>;
+// }
+
+// const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+// const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
+
+// export function AuthProvider({ children }: { children: ReactNode }) {
+//   const [user, setUser] = useState<User | null>(null);
+//   const [loading, setLoading] = useState(true);
+
+//   useEffect(() => {
+//     try {
+//       const token = getAuthToken();
+//       const storedUser = localStorage.getItem("auth_user");
+
+//       if (token && storedUser) {
+//         setUser(JSON.parse(storedUser));
+//       }
+//     } catch (error) {
+//       console.error("Auth check failed:", error);
+//     } finally {
+//       setLoading(false);
+//     }
+//   }, []);
+
+//   const signIn = async (email: string, password: string) => {
+//     try {
+//       const form = new URLSearchParams();
+//       form.append("username", email);
+//       form.append("password", password);
+
+//       const response = await fetch(`${API_BASE_URL}/auth/login`, {
+//         method: "POST",
+//         headers: { "Content-Type": "application/x-www-form-urlencoded" },
+//         body: form,
+//       });
+
+//       if (!response.ok) {
+//         const errData = await response.json().catch(() => ({}));
+//         toast.error(errData.detail || "Login failed");
+//         throw new Error(errData.detail || "Login failed");
+//       }
+
+//       const data = await response.json();
+//       const accessToken = data.access_token;
+
+//       setAuthToken(accessToken);
+//       const userData: User = { id: "unknown", email, created_at: new Date().toISOString() };
+//       localStorage.setItem("auth_user", JSON.stringify(userData));
+//       setUser(userData);
+
+//       toast.success("Login successful!");
+//     } catch (error) {
+//       console.error("Login error:", error);
+//       throw error;
+//     }
+//   };
+
+//   const signUp = async (email: string, password: string) => {
+//     try {
+//       const res = await fetch(`${API_BASE_URL}/auth/register`, {
+//         method: "POST",
+//         headers: { "Content-Type": "application/json" },
+//         body: JSON.stringify({ email, password, role: "user" }),
+//       });
+
+//       if (!res.ok) {
+//         const errData = await res.json().catch(() => ({}));
+//         toast.error(errData.detail || "Signup failed");
+//         throw new Error(errData.detail || "Signup failed");
+//       }
+
+//       toast.success("Signup successful! Please log in.");
+//     } catch (error) {
+//       console.error("Signup error:", error);
+//       throw error;
+//     }
+//   };
+
+//   const signOut = async () => {
+//     try {
+//       const token = getAuthToken();
+//       if (token) {
+//         await fetch(`${API_BASE_URL}/auth/logout`, {
+//           method: "POST",
+//           headers: { Authorization: `Bearer ${token}` },
+//         });
+//       }
+//     } catch (error) {
+//       console.error("Logout error:", error);
+//     } finally {
+//       removeAuthToken();
+//       localStorage.removeItem("auth_user");
+//       setUser(null);
+//       toast.success("Logged out");
+//     }
+//   };
+
+//   const forgotPassword = async (email: string) => {
+//     try {
+//       const res = await fetch(`${API_BASE_URL}/auth/forgot-password`, {
+//         method: "POST",
+//         headers: { "Content-Type": "application/json" },
+//         body: JSON.stringify({ email }),
+//       });
+
+//       if (!res.ok) {
+//         const data = await res.json().catch(() => ({}));
+//         toast.error(data.detail || "Failed to send reset link");
+//         throw new Error(data.detail || "Failed to send reset link");
+//       }
+
+//       const data = await res.json();
+//       toast.success("Check your email for the password reset link");
+//       return data.reset_token; // return token for internal use
+//     } catch (error) {
+//       console.error(error);
+//       toast.error("Failed to send reset link");
+//       throw error;
+//     }
+//   };
+
+//   const resetPassword = async (token: string, newPassword: string) => {
+//     try {
+//       const res = await fetch(`${API_BASE_URL}/auth/reset-password`, {
+//         method: "POST",
+//         headers: { "Content-Type": "application/json" },
+//         body: JSON.stringify({ token, new_password: newPassword }),
+//       });
+
+//       if (!res.ok) {
+//         const data = await res.json().catch(() => ({}));
+//         toast.error(data.detail || "Password reset failed");
+//         throw new Error(data.detail || "Password reset failed");
+//       }
+
+//       toast.success("Password reset successful!");
+//     } catch (error) {
+//       console.error(error);
+//       toast.error("Password reset failed");
+//       throw error;
+//     }
+//   };
+
+//   return (
+//     <AuthContext.Provider
+//       value={{
+//         user,
+//         loading,
+//         signIn,
+//         signUp,
+//         signOut,
+//         forgotPassword,
+//         resetPassword,
+//       }}
+//     >
+//       {children}
+//     </AuthContext.Provider>
+//   );
+// }
+
+// export function useAuth() {
+//   const context = useContext(AuthContext);
+//   if (!context) throw new Error("useAuth must be used within an AuthProvider");
+//   return context;
+// }
 
 // import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 // import { toast } from "react-toastify";

@@ -5,7 +5,7 @@ import { Layout } from './components/Layout';
 import { Dashboard } from './components/Dashboard';
 import { DevicesPage } from './components/DevicesPage';
 import { AssetsPage } from './components/AssetsPage';
-import { MapPage } from "./components/MapPage";
+import MapPage from "./components/MapPage";
 import { AnalyticsPage } from './components/AnalyticsPage';
 import { SettingsPage } from './components/SettingsPage';
 import { NotificationPanel } from './components/NotificationPanel';
