@@ -1,8 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Activity, Cpu, AlertCircle, TrendingUp } from 'lucide-react';
-import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import { seedSampleData } from '../utils/seedData';
 
 interface Stats {
   totalDevices: number;
@@ -21,7 +19,6 @@ export function Dashboard() {
   });
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [seeded, setSeeded] = useState(false);
 
   useEffect(() => {
     loadDashboardData();
@@ -31,31 +28,19 @@ export function Dashboard() {
     if (!user) return;
 
     try {
-      const [devicesResult, alertsResult] = await Promise.all([
-        supabase.from('devices').select('*').eq('user_id', user.id),
-        supabase.from('alerts').select('*').eq('user_id', user.id).eq('acknowledged', false),
+      // TODO: Replace with actual API calls when backend is ready
+      // For now, using mock data
+      setStats({
+        totalDevices: 12,
+        onlineDevices: 8,
+        offlineDevices: 4,
+        activeAlerts: 3,
+      });
+
+      setRecentActivity([
+        { id: '1', type: 'alert', message: 'Device offline', created_at: new Date().toISOString() },
+        { id: '2', type: 'alert', message: 'Low battery', created_at: new Date().toISOString() },
       ]);
-
-      if (devicesResult.data && devicesResult.data.length === 0 && !seeded) {
-        await seedSampleData(user.id);
-        setSeeded(true);
-        loadDashboardData();
-        return;
-      }
-
-      if (devicesResult.data) {
-        const devices = devicesResult.data;
-        setStats({
-          totalDevices: devices.length,
-          onlineDevices: devices.filter(d => d.status === 'online').length,
-          offlineDevices: devices.filter(d => d.status === 'offline').length,
-          activeAlerts: alertsResult.data?.length || 0,
-        });
-      }
-
-      if (alertsResult.data) {
-        setRecentActivity(alertsResult.data.slice(0, 5));
-      }
     } catch (error) {
       console.error('Error loading dashboard data:', error);
     } finally {

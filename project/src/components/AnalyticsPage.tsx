@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { TrendingUp, Activity, Zap, Navigation } from 'lucide-react';
-import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 
 interface Analytics {
@@ -29,34 +28,20 @@ export function AnalyticsPage() {
     if (!user) return;
 
     try {
-      const [devicesResult, alertsResult] = await Promise.all([
-        supabase.from('devices').select('*').eq('user_id', user.id),
-        supabase.from('alerts').select('*').eq('user_id', user.id),
+      // TODO: Replace with actual API calls when backend is ready
+      // For now, using mock data
+      setAnalytics({
+        totalDistance: 1245,
+        activeDevices: 5,
+        averageSpeed: 35,
+        totalAlerts: 2,
+      });
+
+      setDeviceActivity([
+        { name: 'Device 1', status: 'online', battery: 85, speed: 45 },
+        { name: 'Device 2', status: 'online', battery: 60, speed: 30 },
+        { name: 'Device 3', status: 'offline', battery: 15, speed: 0 },
       ]);
-
-      if (devicesResult.data) {
-        const devices = devicesResult.data;
-        const onlineDevices = devices.filter(d => d.status === 'online');
-        const avgSpeed = onlineDevices.length > 0
-          ? onlineDevices.reduce((sum, d) => sum + (d.speed || 0), 0) / onlineDevices.length
-          : 0;
-
-        setAnalytics({
-          totalDistance: 1245,
-          activeDevices: onlineDevices.length,
-          averageSpeed: Math.round(avgSpeed),
-          totalAlerts: alertsResult.data?.length || 0,
-        });
-
-        setDeviceActivity(
-          devices.map(d => ({
-            name: d.name,
-            status: d.status,
-            battery: d.battery_level || 0,
-            speed: d.speed || 0,
-          }))
-        );
-      }
     } catch (error) {
       console.error('Error loading analytics:', error);
     } finally {

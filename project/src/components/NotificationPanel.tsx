@@ -1,7 +1,5 @@
 import { useEffect, useState } from 'react';
 import { Bell, X, CheckCircle } from 'lucide-react';
-import { supabase } from '../lib/supabase';
-import { useAuth } from '../contexts/AuthContext';
 
 interface Alert {
   id: string;
@@ -18,29 +16,39 @@ interface NotificationPanelProps {
 }
 
 export function NotificationPanel({ isOpen, onClose }: NotificationPanelProps) {
-  const { user } = useAuth();
-  const [alerts, setAlerts] = useState<Alert[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [alerts, setAlerts] = useState<Alert[]>([
+    {
+      id: '1',
+      type: 'warning',
+      category: 'device',
+      message: 'Device offline',
+      acknowledged: false,
+      created_at: new Date().toISOString(),
+    },
+  ]);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
       loadAlerts();
     }
-  }, [isOpen, user]);
+  }, [isOpen]);
 
   const loadAlerts = async () => {
-    if (!user) return;
-
     try {
-      const { data, error } = await supabase
-        .from('alerts')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(20);
-
-      if (error) throw error;
-      setAlerts(data || []);
+      // TODO: Replace with actual API calls when backend is ready
+      setLoading(true);
+      // Mock data for now
+      setAlerts([
+        {
+          id: '1',
+          type: 'warning',
+          category: 'device',
+          message: 'Device offline: Device 3',
+          acknowledged: false,
+          created_at: new Date().toISOString(),
+        },
+      ]);
     } catch (error) {
       console.error('Error loading alerts:', error);
     } finally {
@@ -50,12 +58,6 @@ export function NotificationPanel({ isOpen, onClose }: NotificationPanelProps) {
 
   const acknowledgeAlert = async (id: string) => {
     try {
-      const { error } = await supabase
-        .from('alerts')
-        .update({ acknowledged: true })
-        .eq('id', id);
-
-      if (error) throw error;
       setAlerts(alerts.map(a => a.id === id ? { ...a, acknowledged: true } : a));
     } catch (error) {
       console.error('Error acknowledging alert:', error);
@@ -63,17 +65,8 @@ export function NotificationPanel({ isOpen, onClose }: NotificationPanelProps) {
   };
 
   const clearAll = async () => {
-    if (!user) return;
-
     try {
-      const { error } = await supabase
-        .from('alerts')
-        .update({ acknowledged: true })
-        .eq('user_id', user.id)
-        .eq('acknowledged', false);
-
-      if (error) throw error;
-      loadAlerts();
+      setAlerts(alerts.map(a => ({ ...a, acknowledged: true })));
     } catch (error) {
       console.error('Error clearing alerts:', error);
     }
