@@ -24,8 +24,16 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
+// const API_BASE_URL =
+//   import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+
+function ensureBackend() {
+  if (!API_BASE_URL) {
+    toast.error("Backend not connected yet");
+    throw new Error("Backend not connected");
+  }
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -42,8 +50,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoading(false);
   }, []);
 
+  
+
   // ---------------- LOGIN ----------------
   const signIn = async (email: string, password: string) => {
+    ensureBackend();
     const form = new URLSearchParams();
     form.append("username", email);
     form.append("password", password);
@@ -83,6 +94,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // ---------------- REGISTER ----------------
   const signUp = async (email: string, password: string) => {
+    ensureBackend();
     const res = await fetch(`${API_BASE_URL}/auth/register`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -101,6 +113,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // ---------------- VERIFY EMAIL (OTP) ----------------
   const verifyEmail = async (otp: string) => {
+    ensureBackend();
     const res = await fetch(`${API_BASE_URL}/auth/verify-email`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -119,6 +132,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // ---------------- LOGOUT ----------------
   const signOut = async () => {
+    ensureBackend();
     removeAuthToken();
     localStorage.removeItem("auth_user");
     setUser(null);
@@ -127,6 +141,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // ---------------- FORGOT PASSWORD ----------------
   const forgotPassword = async (email: string) => {
+    ensureBackend();
     const res = await fetch(`${API_BASE_URL}/auth/forgot-password`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -143,6 +158,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // ---------------- RESET PASSWORD ----------------
   const resetPassword = async (otp: string, newPassword: string) => {
+    ensureBackend();
     const res = await fetch(`${API_BASE_URL}/auth/reset-password`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
